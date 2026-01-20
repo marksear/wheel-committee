@@ -23,9 +23,9 @@ export async function POST(request) {
       ]
     })
 
-    // Parse the response
+    // Parse the response - pass formData for watchlist extraction
     const responseText = message.content[0].text
-    const result = parseResponse(responseText)
+    const result = parseResponse(responseText, formData)
 
     return Response.json(result)
   } catch (error) {
@@ -1237,11 +1237,18 @@ Be specific, practical, and conservative. Always prioritize capital preservation
 # END OF PROMPT`
 }
 
-function parseResponse(responseText) {
+function parseResponse(responseText, formData) {
+  // Extract watchlist tickers from formData
+  const watchlistTickers = formData.watchlist
+    ? formData.watchlist.split('\n')
+        .map(line => line.trim().toUpperCase())
+        .filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t))
+    : []
+
   const result = {
     mode: extractMode(responseText),
     summary: extractSummary(responseText),
-    trades: extractTrades(responseText),
+    trades: extractTrades(responseText, watchlistTickers),
     accountSnapshot: extractSection(responseText, 'PART A', 'PART B') || extractSection(responseText, 'ACCOUNT SNAPSHOT', 'PART B'),
     positionReview: extractSection(responseText, 'PART B', 'PART C') || extractSection(responseText, 'POSITION REVIEW', 'PART C'),
     watchlistAnalysis: extractSection(responseText, 'PART C', 'PART D') || extractSection(responseText, 'WATCHLIST ANALYSIS', 'PART D'),
@@ -1299,207 +1306,275 @@ function extractSection(text, startMarker, endMarker) {
   return null
 }
 
-function extractTrades(text) {
+function extractTrades(text, watchlistTickers = []) {
   const trades = []
-  const seenTickers = new Set()
 
-  // Helper to add or update a trade
-  const addOrUpdateTrade = (ticker, data) => {
-    if (!ticker || ticker.length < 1 || ticker.length > 5) return
-    ticker = ticker.toUpperCase()
+  // Company name lookup for common tickers
+  const companyNames = {
+    'AAPL': 'Apple Inc.',
+    'MSFT': 'Microsoft Corporation',
+    'GOOGL': 'Alphabet Inc.',
+    'GOOG': 'Alphabet Inc.',
+    'AMZN': 'Amazon.com Inc.',
+    'META': 'Meta Platforms Inc.',
+    'NVDA': 'NVIDIA Corporation',
+    'TSLA': 'Tesla Inc.',
+    'JPM': 'JPMorgan Chase & Co.',
+    'V': 'Visa Inc.',
+    'JNJ': 'Johnson & Johnson',
+    'WMT': 'Walmart Inc.',
+    'PG': 'Procter & Gamble Co.',
+    'MA': 'Mastercard Inc.',
+    'HD': 'The Home Depot Inc.',
+    'KO': 'The Coca-Cola Company',
+    'PEP': 'PepsiCo Inc.',
+    'MRK': 'Merck & Co. Inc.',
+    'ABBV': 'AbbVie Inc.',
+    'CVX': 'Chevron Corporation',
+    'LLY': 'Eli Lilly and Company',
+    'BAC': 'Bank of America Corp.',
+    'PFE': 'Pfizer Inc.',
+    'COST': 'Costco Wholesale Corp.',
+    'TMO': 'Thermo Fisher Scientific',
+    'CSCO': 'Cisco Systems Inc.',
+    'MCD': 'McDonald\'s Corporation',
+    'ABT': 'Abbott Laboratories',
+    'DHR': 'Danaher Corporation',
+    'ACN': 'Accenture plc',
+    'NKE': 'NIKE Inc.',
+    'DIS': 'The Walt Disney Company',
+    'VZ': 'Verizon Communications',
+    'ADBE': 'Adobe Inc.',
+    'CMCSA': 'Comcast Corporation',
+    'INTC': 'Intel Corporation',
+    'CRM': 'Salesforce Inc.',
+    'T': 'AT&T Inc.',
+    'UNH': 'UnitedHealth Group Inc.',
+    'XOM': 'Exxon Mobil Corporation',
+    'AMD': 'Advanced Micro Devices',
+    'NFLX': 'Netflix Inc.',
+    'ORCL': 'Oracle Corporation',
+    'IBM': 'IBM Corporation',
+    'QCOM': 'QUALCOMM Inc.',
+    'TXN': 'Texas Instruments Inc.',
+    'LOW': 'Lowe\'s Companies Inc.',
+    'SBUX': 'Starbucks Corporation',
+    'GS': 'Goldman Sachs Group',
+    'BLK': 'BlackRock Inc.',
+    'SPGI': 'S&P Global Inc.',
+    'AMAT': 'Applied Materials Inc.',
+    'BKNG': 'Booking Holdings Inc.',
+    'MDLZ': 'Mondelez International',
+    'ADP': 'Automatic Data Processing',
+    'GILD': 'Gilead Sciences Inc.',
+    'MMM': 'The 3M Company',
+    'C': 'Citigroup Inc.',
+    'CVS': 'CVS Health Corporation',
+    'MO': 'Altria Group Inc.',
+    'BMY': 'Bristol-Myers Squibb',
+    'WFC': 'Wells Fargo & Company',
+    'SCHW': 'Charles Schwab Corp.',
+    'BX': 'Blackstone Inc.',
+    'SO': 'Southern Company',
+    'DUK': 'Duke Energy Corporation',
+    'CL': 'Colgate-Palmolive Co.',
+    'GE': 'General Electric Co.',
+    'SYK': 'Stryker Corporation',
+    'ZTS': 'Zoetis Inc.',
+    'CB': 'Chubb Limited',
+    'VRTX': 'Vertex Pharmaceuticals',
+    'NOW': 'ServiceNow Inc.',
+    'ISRG': 'Intuitive Surgical',
+    'REGN': 'Regeneron Pharmaceuticals',
+    'BSX': 'Boston Scientific Corp.',
+    'ATVI': 'Activision Blizzard',
+    'DE': 'Deere & Company',
+    'LRCX': 'Lam Research Corp.',
+    'ADI': 'Analog Devices Inc.',
+    'PNC': 'PNC Financial Services',
+    'USB': 'U.S. Bancorp',
+    'TJX': 'The TJX Companies',
+    'CI': 'The Cigna Group',
+    'EQIX': 'Equinix Inc.',
+    'CME': 'CME Group Inc.',
+    'ITW': 'Illinois Tool Works',
+    'MMC': 'Marsh McLennan',
+    'AON': 'Aon plc',
+    'APD': 'Air Products & Chemicals',
+    'SHW': 'Sherwin-Williams Co.',
+    'ETN': 'Eaton Corporation',
+    'EMR': 'Emerson Electric Co.',
+    'KLAC': 'KLA Corporation',
+    'FCX': 'Freeport-McMoRan Inc.',
+    'NSC': 'Norfolk Southern Corp.',
+    'PSX': 'Phillips 66',
+    'MPC': 'Marathon Petroleum',
+    'VLO': 'Valero Energy Corp.',
+    'SLB': 'Schlumberger Limited',
+    'F': 'Ford Motor Company',
+    'GM': 'General Motors Company'
+  }
 
-    let trade = trades.find(t => t.ticker === ticker)
-    if (!trade) {
-      trade = { ticker }
-      trades.push(trade)
-      seenTickers.add(ticker)
+  // For each ticker in the watchlist, find its section and extract data
+  for (const ticker of watchlistTickers) {
+    // Find the section where this ticker is analyzed
+    // Look for various patterns where Claude might discuss this ticker
+    const tickerPatterns = [
+      // ### AAPL — Apple Inc.
+      new RegExp(`(?:^|\\n)#{1,4}\\s*\\*?\\*?${ticker}\\*?\\*?\\s*[-—:]([\\s\\S]*?)(?=\\n#{1,4}\\s|$)`, 'im'),
+      // **AAPL** or AAPL: followed by content
+      new RegExp(`(?:^|\\n)\\*\\*${ticker}\\*\\*([\\s\\S]*?)(?=\\n\\*\\*[A-Z]{1,5}\\*\\*|\\n#{1,4}|$)`, 'im'),
+      // Look for TICKER in a wheel score context
+      new RegExp(`${ticker}[\\s\\S]{0,50}?Wheel\\s*Score[\\s\\S]*?(?=\\n#{1,4}|\\n\\*\\*[A-Z]{1,5}\\*\\*|$)`, 'i'),
+      // General mention with surrounding context (2000 chars)
+      new RegExp(`(?:^|[\\n\\s])${ticker}(?:[\\s\\n]|[-—:])[\\s\\S]{0,2000}`, 'im')
+    ]
+
+    let section = null
+    for (const pattern of tickerPatterns) {
+      const match = text.match(pattern)
+      if (match) {
+        section = match[0]
+        break
+      }
     }
 
-    // Update with new data, preferring non-null values
-    Object.keys(data).forEach(key => {
-      if (data[key] !== null && data[key] !== undefined) {
-        trade[key] = data[key]
-      }
-    })
-  }
+    if (!section) {
+      // Ticker not found in response, add with minimal data
+      trades.push({
+        ticker,
+        name: companyNames[ticker] || null,
+        wheelScore: null,
+        verdict: null,
+        premium: null
+      })
+      continue
+    }
 
-  // Extract section around a ticker mention
-  const getSectionForTicker = (ticker, startIndex) => {
-    // Find section boundaries (next ticker header or 3000 chars)
-    const nextSection = text.slice(startIndex + 1).search(/(?:^|\n)(?:#{1,3}\s*)?(?:\*\*)?[A-Z]{1,5}(?:\*\*)?\s*[-—]/m)
-    const endIndex = nextSection > 0 ? startIndex + 1 + nextSection : startIndex + 3000
-    return text.substring(startIndex, Math.min(endIndex, text.length))
-  }
-
-  // Parse wheel score from section - multiple patterns
-  const parseWheelScore = (section) => {
-    const patterns = [
+    // Extract Wheel Score - look for various patterns
+    let wheelScore = null
+    const scorePatterns = [
       /Wheel\s*Score[™]?\s*[:=]?\s*\*?\*?(\d+\.?\d*)\s*(?:\/\s*10)?/i,
-      /WHEEL\s*SCORE[™]?\s*[:=]?\s*(\d+\.?\d*)/i,
-      /Score[™]?\s*[:=|]\s*\*?\*?(\d+\.?\d*)\s*\/\s*10/i,
-      /(\d+\.?\d*)\s*\/\s*10\s*\[?[⭐★]+/i,
-      /Rating:\s*(\d+\.?\d*)\s*\/\s*10/i,
+      /(\d+\.?\d*)\s*\/\s*10/,
+      /Score[:\s]+(\d+\.?\d*)(?:\s*\/\s*10)?/i,
+      /(\d+\.?\d*)\s*\[?[⭐★]+/,
+      /Rating[:\s]+(\d+\.?\d*)/i,
     ]
-    for (const pattern of patterns) {
+    for (const pattern of scorePatterns) {
       const match = section.match(pattern)
       if (match) {
         const score = parseFloat(match[1])
-        if (score >= 0 && score <= 10) return score
+        if (score >= 1 && score <= 10) {
+          wheelScore = score
+          break
+        }
       }
     }
-    return null
-  }
 
-  // Parse verdict from section
-  const parseVerdict = (section) => {
-    const patterns = [
-      /Verdict\s*[:=|]?\s*\*?\*?\[?(SELL|BUY|WAIT|SKIP|PASS)\]?\*?\*?/i,
-      /Recommendation\s*[:=|]?\s*\*?\*?\[?(SELL|BUY|WAIT|SKIP|PASS)\]?\*?\*?/i,
-      /Action\s*[:=|]?\s*\*?\*?\[?(SELL|BUY|WAIT|SKIP|PASS)\]?\*?\*?/i,
+    // Extract company name from section or use lookup
+    let name = companyNames[ticker] || null
+    const namePatterns = [
+      new RegExp(`${ticker}\\s*[-—:]\\s*([A-Z][A-Za-z0-9\\s&.,'()]+?)(?:\\n|\\||Wheel|Score|$)`, 'i'),
+      /Company[:\s]+([A-Z][A-Za-z0-9\s&.,'()]+?)(?:\n|\||$)/i,
+      /Stock[:\s]+[A-Z]{1,5}\s*[-—]\s*([A-Z][A-Za-z0-9\s&.,'()]+?)(?:\n|\||$)/i,
     ]
-    for (const pattern of patterns) {
+    for (const pattern of namePatterns) {
       const match = section.match(pattern)
-      if (match) return match[1].toUpperCase()
+      if (match && match[1].length > 3 && match[1].length < 50) {
+        const extractedName = match[1].trim().replace(/\*+/g, '').replace(/\s+/g, ' ')
+        // Validate it looks like a company name
+        if (/^[A-Z]/.test(extractedName) && !/^(SELL|BUY|WAIT|SKIP|HOLD|None)$/i.test(extractedName)) {
+          name = extractedName
+          break
+        }
+      }
     }
-    return null
-  }
 
-  // Parse premium from section
-  const parsePremium = (section) => {
-    const patterns = [
-      /Premium[^$\n]*\$(\d+\.?\d*)/i,
+    // Extract verdict
+    let verdict = null
+    const verdictPatterns = [
+      /Verdict[:\s|]+\*?\*?\[?(SELL|BUY|WAIT|SKIP|PASS|HOLD)\]?\*?\*?/i,
+      /Recommendation[:\s|]+\*?\*?\[?(SELL|BUY|WAIT|SKIP|PASS|HOLD)\]?\*?\*?/i,
+      /Action[:\s|]+\*?\*?\[?(SELL|BUY|WAIT|SKIP|PASS|HOLD)\]?\*?\*?/i,
+      /\*\*(SELL|WAIT|SKIP)\*\*/i,
+    ]
+    for (const pattern of verdictPatterns) {
+      const match = section.match(pattern)
+      if (match) {
+        verdict = match[1].toUpperCase()
+        break
+      }
+    }
+
+    // Extract premium
+    let premium = null
+    const premiumPatterns = [
+      /Premium\s*\([^)]*\)[:\s]*\$(\d+\.?\d*)/i,
+      /Premium[:\s]+\$(\d+\.?\d*)/i,
       /\$(\d+\.?\d*)\s*(?:per contract|premium)/i,
-      /Collect[^$\n]*\$(\d+\.?\d*)/i,
+      /Collect[:\s]+\$(\d+\.?\d*)/i,
+      /\$(\d+\.?\d*)\s*\(/,  // $2.50 (
     ]
-    for (const pattern of patterns) {
+    for (const pattern of premiumPatterns) {
       const match = section.match(pattern)
-      if (match) return parseFloat(match[1])
+      if (match) {
+        const p = parseFloat(match[1])
+        if (p > 0 && p < 1000) {  // Reasonable premium range
+          premium = p
+          break
+        }
+      }
     }
-    return null
-  }
 
-  // Parse company name
-  const parseCompanyName = (section, ticker) => {
-    const patterns = [
-      new RegExp(`${ticker}\\s*[-—:]\\s*([A-Za-z][A-Za-z0-9\\s&.,']+?)(?:\\n|\\||$)`, 'i'),
-      /Company\s*[:=|]?\s*([A-Za-z][A-Za-z0-9\s&.,']+?)(?:\n|\||$)/i,
-      /Stock\s*[:=|]?\s*[A-Z]{1,5}\s*[-—]\s*([A-Za-z][A-Za-z0-9\s&.,']+?)(?:\n|\||$)/i,
-    ]
-    for (const pattern of patterns) {
-      const match = section.match(pattern)
-      if (match) return match[1].trim().replace(/\*+/g, '')
-    }
-    return null
-  }
+    // Extract returns
+    let monthlyReturn = null
+    let annualizedReturn = null
+    const monthlyMatch = section.match(/Monthly\s*Return[^:]*[:\s]+(\d+\.?\d*)%/i)
+    const annualMatch = section.match(/Annual(?:ized)?\s*Return[^:]*[:\s]+(\d+\.?\d*)%/i)
+    if (monthlyMatch) monthlyReturn = parseFloat(monthlyMatch[1])
+    if (annualMatch) annualizedReturn = parseFloat(annualMatch[1])
 
-  // Parse monthly/annualized return
-  const parseReturns = (section) => {
-    const monthly = section.match(/Monthly\s*Return[^:]*[:=|]?\s*(\d+\.?\d*)%/i)
-    const annual = section.match(/Annual(?:ized)?\s*Return[^:]*[:=|]?\s*(\d+\.?\d*)%/i)
-    return {
-      monthlyReturn: monthly ? parseFloat(monthly[1]) : null,
-      annualizedReturn: annual ? parseFloat(annual[1]) : null
-    }
-  }
+    // Extract strike price
+    let strike = null
+    const strikeMatch = section.match(/Strike[:\s|]+\$?(\d+\.?\d*)/i)
+    if (strikeMatch) strike = parseFloat(strikeMatch[1])
 
-  // Pattern 1: Look for "### TICKER — Company Name" or "## TICKER" headers
-  const headerMatches = text.matchAll(/(?:^|\n)#{1,3}\s*\*?\*?([A-Z]{1,5})\*?\*?\s*[-—:]\s*([^\n]+)/gm)
-  for (const match of headerMatches) {
-    const ticker = match[1]
-    const name = match[2].trim().replace(/\*+/g, '')
-    const section = getSectionForTicker(ticker, match.index)
+    // Extract expiry/DTE
+    let dte = null
+    const dteMatch = section.match(/(\d+)\s*(?:DTE|days?\s*to\s*expir)/i)
+    if (dteMatch) dte = parseInt(dteMatch[1])
 
-    addOrUpdateTrade(ticker, {
+    trades.push({
+      ticker,
       name,
-      wheelScore: parseWheelScore(section),
-      verdict: parseVerdict(section),
-      premium: parsePremium(section),
-      ...parseReturns(section)
+      wheelScore,
+      verdict,
+      premium,
+      monthlyReturn,
+      annualizedReturn,
+      strike,
+      dte
     })
   }
 
-  // Pattern 2: Look for "**TICKER**" bold mentions with scores nearby
-  const boldMatches = text.matchAll(/\*\*([A-Z]{1,5})\*\*/g)
-  for (const match of boldMatches) {
-    const ticker = match[1]
-    if (seenTickers.has(ticker)) continue
-
-    const section = getSectionForTicker(ticker, match.index)
-    const score = parseWheelScore(section)
-
-    if (score !== null) {
-      addOrUpdateTrade(ticker, {
-        name: parseCompanyName(section, ticker),
-        wheelScore: score,
-        verdict: parseVerdict(section),
-        premium: parsePremium(section),
-        ...parseReturns(section)
-      })
-    }
-  }
-
-  // Pattern 3: Look for table rows with ticker | score format
-  const tableMatches = text.matchAll(/\|\s*\*?\*?([A-Z]{1,5})\*?\*?\s*\|[^|]*\|[^|]*?(\d+\.?\d*)\s*(?:\/\s*10)?[^|]*\|/g)
-  for (const match of tableMatches) {
-    const ticker = match[1]
-    const score = parseFloat(match[2])
-    if (score >= 0 && score <= 10) {
-      addOrUpdateTrade(ticker, { wheelScore: score })
-    }
-  }
-
-  // Pattern 4: Look for "TICKER: X.X/10" or "TICKER (X.X)" patterns
-  const scoreMatches = text.matchAll(/\b([A-Z]{1,5})\s*[:(-]\s*(\d+\.?\d*)\s*(?:\/\s*10|\))/g)
-  for (const match of scoreMatches) {
-    const ticker = match[1]
-    const score = parseFloat(match[2])
-    if (score >= 0 && score <= 10 && !['PART', 'STEP', 'TIER', 'WEEK'].includes(ticker)) {
-      const section = getSectionForTicker(ticker, match.index)
-      addOrUpdateTrade(ticker, {
-        wheelScore: score,
-        name: parseCompanyName(section, ticker),
-        verdict: parseVerdict(section)
-      })
-    }
-  }
-
-  // Pattern 5: Look for "WHEEL SCORE™ CALCULATION: TICKER"
-  const calcMatches = text.matchAll(/WHEEL\s*SCORE[™]?\s*(?:CALCULATION)?[:\s]*([A-Z]{1,5})/gi)
-  for (const match of calcMatches) {
-    const ticker = match[1]
-    const section = getSectionForTicker(ticker, match.index)
-    addOrUpdateTrade(ticker, {
-      wheelScore: parseWheelScore(section),
-      name: parseCompanyName(section, ticker),
-      verdict: parseVerdict(section),
-      premium: parsePremium(section),
-      ...parseReturns(section)
-    })
-  }
-
-  // Pattern 6: Look for "TRADE 1: TICKER" or "Trade #1 - TICKER"
-  const tradeMatches = text.matchAll(/TRADE\s*(?:#?\d+)?[:\s-]*([A-Z]{1,5})/gi)
-  for (const match of tradeMatches) {
-    const ticker = match[1]
-    const section = getSectionForTicker(ticker, match.index)
-    addOrUpdateTrade(ticker, {
-      wheelScore: parseWheelScore(section),
-      name: parseCompanyName(section, ticker),
-      verdict: parseVerdict(section) || 'SELL',
-      premium: parsePremium(section),
-      ...parseReturns(section)
-    })
-  }
-
-  // Sort by wheel score (highest first), then alphabetically
+  // Sort by wheel score (highest first), then by verdict priority (SELL > WAIT > SKIP > null)
+  const verdictPriority = { 'SELL': 0, 'BUY': 0, 'WAIT': 1, 'HOLD': 2, 'SKIP': 3, 'PASS': 3 }
   trades.sort((a, b) => {
+    // First by wheel score (highest first)
     if (a.wheelScore !== null && b.wheelScore !== null) {
       return b.wheelScore - a.wheelScore
     }
     if (a.wheelScore !== null) return -1
     if (b.wheelScore !== null) return 1
+
+    // Then by verdict priority
+    const aPriority = a.verdict ? (verdictPriority[a.verdict] ?? 4) : 5
+    const bPriority = b.verdict ? (verdictPriority[b.verdict] ?? 4) : 5
+    if (aPriority !== bPriority) return aPriority - bPriority
+
+    // Finally alphabetically
     return a.ticker.localeCompare(b.ticker)
   })
 
-  return trades.filter(t => t.ticker && t.ticker.length >= 1 && t.ticker.length <= 5)
+  return trades
 }
