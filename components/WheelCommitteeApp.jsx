@@ -697,6 +697,101 @@ JNJ"
                           <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedTrade === trade.ticker ? 'rotate-180' : ''}`} />
                         </div>
                       </button>
+
+                      {/* Expanded Trade Details */}
+                      {expandedTrade === trade.ticker && (
+                        <div className="px-4 pb-4 bg-gray-50 border-t border-gray-100">
+                          {/* Quick Stats Grid */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 py-4">
+                            {trade.currentPrice && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Current Price</p>
+                                <p className="font-bold text-gray-900">${trade.currentPrice}</p>
+                              </div>
+                            )}
+                            {trade.strike && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Strike Price</p>
+                                <p className="font-bold text-gray-900">${trade.strike}</p>
+                              </div>
+                            )}
+                            {trade.premium && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Premium</p>
+                                <p className="font-bold text-emerald-600">${trade.premium}</p>
+                              </div>
+                            )}
+                            {trade.dte && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Days to Expiry</p>
+                                <p className="font-bold text-gray-900">{trade.dte} DTE</p>
+                              </div>
+                            )}
+                            {trade.delta && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Delta</p>
+                                <p className="font-bold text-gray-900">{trade.delta}</p>
+                              </div>
+                            )}
+                            {trade.ivRank && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">IV Rank</p>
+                                <p className={`font-bold ${trade.ivRank >= 50 ? 'text-emerald-600' : 'text-amber-600'}`}>{trade.ivRank}%</p>
+                              </div>
+                            )}
+                            {trade.monthlyReturn && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Monthly Return</p>
+                                <p className="font-bold text-emerald-600">{trade.monthlyReturn}%</p>
+                              </div>
+                            )}
+                            {trade.annualizedReturn && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Annualized Return</p>
+                                <p className="font-bold text-emerald-600">{trade.annualizedReturn}%</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Expiration Date */}
+                          {trade.expirationDate && (
+                            <div className="mb-3">
+                              <span className="text-sm text-gray-500">Expiration: </span>
+                              <span className="text-sm font-medium text-gray-700">{trade.expirationDate}</span>
+                            </div>
+                          )}
+
+                          {/* Assignment Comfort */}
+                          {trade.assignmentComfort && (
+                            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <p className="text-xs font-medium text-blue-800 mb-1">Assignment Comfort Test</p>
+                              <p className="text-sm text-blue-700">{trade.assignmentComfort}</p>
+                            </div>
+                          )}
+
+                          {/* Rationale */}
+                          {trade.rationale && (
+                            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                              <p className="text-xs font-medium text-amber-800 mb-1">Analysis</p>
+                              <p className="text-sm text-amber-700">{trade.rationale}</p>
+                            </div>
+                          )}
+
+                          {/* Full Details */}
+                          {trade.details && (
+                            <details className="mt-3">
+                              <summary className="text-sm font-medium text-gray-600 cursor-pointer hover:text-gray-900">
+                                View Full Analysis
+                              </summary>
+                              <div className="mt-2 p-3 bg-white border border-gray-200 rounded-lg">
+                                <pre className="whitespace-pre-wrap text-xs text-gray-600 font-mono overflow-auto max-h-64">
+                                  {trade.details}
+                                </pre>
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

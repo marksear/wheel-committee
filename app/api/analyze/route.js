@@ -1544,6 +1544,74 @@ function extractTrades(text, watchlistTickers = []) {
     const dteMatch = section.match(/(\d+)\s*(?:DTE|days?\s*to\s*expir)/i)
     if (dteMatch) dte = parseInt(dteMatch[1])
 
+    // Extract IV Rank
+    let ivRank = null
+    const ivMatch = section.match(/IV\s*Rank[:\s]+(\d+\.?\d*)%?/i)
+    if (ivMatch) ivRank = parseFloat(ivMatch[1])
+
+    // Extract current price
+    let currentPrice = null
+    const pricePatterns = [
+      /Current\s*Price[:\s]+\$?(\d+\.?\d*)/i,
+      /Price[:\s]+\$?(\d+\.?\d*)/i,
+      /trading\s*(?:at|around)\s*\$?(\d+\.?\d*)/i,
+    ]
+    for (const pattern of pricePatterns) {
+      const match = section.match(pattern)
+      if (match) {
+        const price = parseFloat(match[1])
+        if (price > 1 && price < 10000) {
+          currentPrice = price
+          break
+        }
+      }
+    }
+
+    // Extract delta
+    let delta = null
+    const deltaMatch = section.match(/Delta[:\s]+(-?\d*\.?\d+)/i)
+    if (deltaMatch) delta = parseFloat(deltaMatch[1])
+
+    // Extract expiration date
+    let expirationDate = null
+    const expMatch = section.match(/Expir(?:ation|y)[:\s]+([A-Za-z]+\s*\d{1,2}(?:,?\s*\d{4})?|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i)
+    if (expMatch) expirationDate = expMatch[1].trim()
+
+    // Extract assignment comfort / would own assessment
+    let assignmentComfort = null
+    const comfortPatterns = [
+      /Assignment\s*Comfort[:\s]+([^\n]+)/i,
+      /Would\s*(?:you\s*)?own[:\s]+([^\n]+)/i,
+      /Comfort[:\s]+(Yes|No|Maybe)[^\n]*/i,
+    ]
+    for (const pattern of comfortPatterns) {
+      const match = section.match(pattern)
+      if (match) {
+        assignmentComfort = match[1].trim().substring(0, 100)
+        break
+      }
+    }
+
+    // Extract reasoning/rationale
+    let rationale = null
+    const rationalePatterns = [
+      /(?:Rationale|Reasoning|Why)[:\s]+([^\n]+(?:\n(?![A-Z])[^\n]+)*)/i,
+      /(?:Analysis|Assessment)[:\s]+([^\n]+(?:\n(?![A-Z])[^\n]+)*)/i,
+    ]
+    for (const pattern of rationalePatterns) {
+      const match = section.match(pattern)
+      if (match) {
+        rationale = match[1].trim().substring(0, 300)
+        break
+      }
+    }
+
+    // Extract the full section as details (cleaned up)
+    let details = section
+      .replace(/^[\s\n]+/, '')  // trim leading whitespace
+      .substring(0, 1500)  // limit length
+      .trim()
+
     trades.push({
       ticker,
       name,
@@ -1553,7 +1621,14 @@ function extractTrades(text, watchlistTickers = []) {
       monthlyReturn,
       annualizedReturn,
       strike,
-      dte
+      dte,
+      ivRank,
+      currentPrice,
+      delta,
+      expirationDate,
+      assignmentComfort,
+      rationale,
+      details
     })
   }
 
