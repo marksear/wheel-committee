@@ -52,24 +52,40 @@ export default function WheelCommitteeApp() {
     { title: 'Analysis', icon: Brain },
   ];
 
-  const analysisSteps = [
-    'Loading account data...',
-    'Checking buying power...',
-    'Calculating current exposure...',
-    'Analyzing AAPL...',
-    'Analyzing MSFT...',
-    'Analyzing KO...',
-    'Analyzing PEP...',
-    'Analyzing JNJ...',
-    'Computing Wheel Scores™...',
-    'Checking earnings dates...',
-    'Screening IV Rank...',
-    'Selecting optimal strikes...',
-    'Calculating premiums...',
-    'Running Assignment Comfort Test...',
-    'Ranking opportunities...',
-    'Generating recommendations...',
-  ];
+  // Build dynamic analysis steps based on watchlist
+  const getAnalysisSteps = () => {
+    const tickers = formData.watchlist
+      .split('\n')
+      .map(line => line.trim().toUpperCase())
+      .filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t));
+
+    const steps = [
+      'Loading account data...',
+      'Checking buying power...',
+      'Calculating current exposure...',
+    ];
+
+    // Add a step for each ticker in the watchlist
+    tickers.forEach(ticker => {
+      steps.push(`Analyzing ${ticker}...`);
+    });
+
+    // Add the final processing steps
+    steps.push(
+      'Computing Wheel Scores™...',
+      'Checking earnings dates...',
+      'Screening IV Rank...',
+      'Selecting optimal strikes...',
+      'Calculating premiums...',
+      'Running Assignment Comfort Test...',
+      'Ranking opportunities...',
+      'Generating recommendations...'
+    );
+
+    return steps;
+  };
+
+  const analysisSteps = getAnalysisSteps();
 
   const [currentAnalysisStep, setCurrentAnalysisStep] = useState(0);
 
@@ -79,12 +95,16 @@ export default function WheelCommitteeApp() {
     setAnalysisError(null);
 
     // Animate through steps while waiting for API
+    // Adjust timing based on number of steps (aim for ~15-20 seconds total animation)
+    const totalAnimationTime = 18000; // 18 seconds
+    const stepInterval = Math.max(400, Math.min(1000, totalAnimationTime / analysisSteps.length));
+
     const interval = setInterval(() => {
       setCurrentAnalysisStep(prev => {
         if (prev >= analysisSteps.length - 1) return prev;
         return prev + 1;
       });
-    }, 800);
+    }, stepInterval);
 
     try {
       const response = await fetch('/api/analyze', {
