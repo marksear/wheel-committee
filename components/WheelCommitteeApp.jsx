@@ -12,7 +12,9 @@ export default function WheelCommitteeApp() {
   const [step, setStep] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
-  const [expandedTrade, setExpandedTrade] = useState('AAPL');
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [analysisError, setAnalysisError] = useState(null);
+  const [expandedTrade, setExpandedTrade] = useState(null);
   const [activeTab, setActiveTab] = useState('new');
 
   const [formData, setFormData] = useState({
@@ -71,23 +73,46 @@ export default function WheelCommitteeApp() {
 
   const [currentAnalysisStep, setCurrentAnalysisStep] = useState(0);
 
-  const runAnalysis = () => {
+  const runAnalysis = async () => {
     setIsAnalyzing(true);
     setCurrentAnalysisStep(0);
-    
+    setAnalysisError(null);
+
+    // Animate through steps while waiting for API
     const interval = setInterval(() => {
       setCurrentAnalysisStep(prev => {
-        if (prev >= analysisSteps.length - 1) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsAnalyzing(false);
-            setAnalysisComplete(true);
-          }, 500);
-          return prev;
-        }
+        if (prev >= analysisSteps.length - 1) return prev;
         return prev + 1;
       });
-    }, 350);
+    }, 800);
+
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ formData })
+      });
+
+      clearInterval(interval);
+
+      if (!response.ok) {
+        throw new Error('Analysis failed');
+      }
+
+      const result = await response.json();
+      setAnalysisResult(result);
+      setCurrentAnalysisStep(analysisSteps.length - 1);
+
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setAnalysisComplete(true);
+      }, 500);
+
+    } catch (error) {
+      clearInterval(interval);
+      setAnalysisError(error.message);
+      setIsAnalyzing(false);
+    }
   };
 
   // Star rating component
@@ -523,13 +548,13 @@ JNJ"
                 <RefreshCw className="absolute inset-0 m-auto w-8 h-8 text-emerald-600" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900">Wheel Committee in Session</h2>
-              
+
               <div className="max-w-md mx-auto text-left bg-gray-50 rounded-xl p-4">
                 <div className="space-y-2">
                   {analysisSteps.map((stepText, i) => (
                     <div key={i} className={`flex items-center gap-3 text-sm transition-all duration-300 ${
-                      i < currentAnalysisStep ? 'text-green-600' : 
-                      i === currentAnalysisStep ? 'text-emerald-600 font-medium' : 
+                      i < currentAnalysisStep ? 'text-green-600' :
+                      i === currentAnalysisStep ? 'text-emerald-600 font-medium' :
                       'text-gray-300'
                     }`}>
                       {i < currentAnalysisStep ? (
@@ -548,7 +573,25 @@ JNJ"
           );
         }
 
-        if (analysisComplete) {
+        if (analysisError) {
+          return (
+            <div className="text-center py-12 space-y-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full mx-auto flex items-center justify-center">
+                <XCircle className="w-8 h-8 text-red-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">Analysis Failed</h2>
+              <p className="text-gray-600">{analysisError}</p>
+              <button
+                onClick={runAnalysis}
+                className="px-6 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          );
+        }
+
+        if (analysisComplete && analysisResult) {
           return (
             <div className="space-y-6">
               {/* Header */}
@@ -558,189 +601,142 @@ JNJ"
                     <p className="text-emerald-200 text-sm">Wheel Committee Report</p>
                     <h1 className="text-2xl font-bold mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h1>
                     <p className="text-emerald-300 mt-2">
-                      {formData.mode === 'cash_secured' ? 'Cash-Secured Mode' : 'Margin Mode'} • {formData.watchlist.split('\n').filter(t => t.trim()).length} stocks analyzed
+                      {analysisResult.mode || (formData.mode === 'cash_secured' ? 'Cash-Secured Mode' : 'Margin Mode')} • {formData.watchlist.split('\n').filter(t => t.trim()).length} stocks analyzed
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-4 gap-4 mt-6">
                   <div className="bg-white/10 rounded-lg p-3">
                     <p className="text-emerald-200 text-xs">Cash Available</p>
                     <p className="text-lg font-bold">${parseInt(formData.cashAvailable).toLocaleString()}</p>
                   </div>
                   <div className="bg-white/10 rounded-lg p-3">
-                    <p className="text-emerald-200 text-xs">Wheel Candidates</p>
-                    <p className="text-lg font-bold">4</p>
+                    <p className="text-emerald-200 text-xs">Stocks Analyzed</p>
+                    <p className="text-lg font-bold">{analysisResult.trades?.length || formData.watchlist.split('\n').filter(t => t.trim()).length}</p>
                   </div>
                   <div className="bg-white/10 rounded-lg p-3">
-                    <p className="text-emerald-200 text-xs">Est. Monthly Income</p>
-                    <p className="text-lg font-bold text-green-400">$847</p>
+                    <p className="text-emerald-200 text-xs">Target DTE</p>
+                    <p className="text-lg font-bold">{formData.targetDte} days</p>
                   </div>
                   <div className="bg-white/10 rounded-lg p-3">
-                    <p className="text-emerald-200 text-xs">Annualized Return</p>
-                    <p className="text-lg font-bold text-green-400">22.4%</p>
+                    <p className="text-emerald-200 text-xs">Target Delta</p>
+                    <p className="text-lg font-bold">{formData.targetDelta}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Trade Recommendations */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-4 border-b border-gray-100">
-                  <h2 className="font-bold text-gray-900">Recommended Trades</h2>
-                </div>
-                
-                {/* AAPL Trade Card */}
-                <div className="border-b border-gray-100">
-                  <button
-                    onClick={() => setExpandedTrade(expandedTrade === 'AAPL' ? null : 'AAPL')}
-                    className="w-full p-4 flex items-center justify-between hover:bg-gray-50"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                        <span className="text-emerald-700 font-bold">8.4</span>
-                      </div>
-                      <div className="text-left">
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-gray-900">AAPL</p>
-                          <StarRating rating={4} />
-                        </div>
-                        <p className="text-sm text-gray-500">Cash-Secured Put • 35 DTE</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="font-bold text-emerald-600">$285 premium</p>
-                        <p className="text-sm text-gray-500">1.6% monthly • 19.2% ann.</p>
-                      </div>
-                      <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedTrade === 'AAPL' ? 'rotate-180' : ''}`} />
-                    </div>
-                  </button>
-                  
-                  {expandedTrade === 'AAPL' && (
-                    <div className="p-4 bg-gray-50 border-t border-gray-100 space-y-4">
-                      <div className="grid grid-cols-4 gap-3">
-                        <div className="bg-white rounded-lg p-3 text-center">
-                          <p className="text-xs text-gray-500">Current Price</p>
-                          <p className="font-bold text-gray-900">$185.50</p>
-                        </div>
-                        <div className="bg-white rounded-lg p-3 text-center">
-                          <p className="text-xs text-gray-500">Strike</p>
-                          <p className="font-bold text-blue-600">$180.00</p>
-                        </div>
-                        <div className="bg-white rounded-lg p-3 text-center">
-                          <p className="text-xs text-gray-500">Delta</p>
-                          <p className="font-bold text-gray-900">0.18</p>
-                        </div>
-                        <div className="bg-white rounded-lg p-3 text-center">
-                          <p className="text-xs text-gray-500">IV Rank</p>
-                          <p className="font-bold text-amber-600">42%</p>
-                        </div>
-                      </div>
+              {/* Trade Recommendations from API */}
+              {analysisResult.trades && analysisResult.trades.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-100">
+                    <h2 className="font-bold text-gray-900">Wheel Score™ Analysis</h2>
+                  </div>
 
-                      <div className="bg-white rounded-lg p-4">
-                        <p className="text-sm font-medium text-gray-700 mb-2">Trade Details</p>
-                        <div className="text-sm text-gray-600 space-y-1">
-                          <p><strong>Contract:</strong> AAPL Feb 21 $180 PUT</p>
-                          <p><strong>Premium (mid):</strong> $2.85 ($285 per contract)</p>
-                          <p><strong>Cash Required:</strong> $18,000</p>
-                          <p><strong>Breakeven:</strong> $177.15 (4.5% below current)</p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                          <div className="flex items-center gap-2 mb-1">
-                            <CheckCircle2 className="w-4 h-4 text-green-600" />
-                            <p className="text-sm font-medium text-green-800">If Expires Worthless (82%)</p>
+                  {analysisResult.trades.map((trade, index) => (
+                    <div key={trade.ticker || index} className="border-b border-gray-100 last:border-b-0">
+                      <button
+                        onClick={() => setExpandedTrade(expandedTrade === trade.ticker ? null : trade.ticker)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-gray-50"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                            trade.wheelScore >= 8 ? 'bg-emerald-100' :
+                            trade.wheelScore >= 7 ? 'bg-green-100' :
+                            trade.wheelScore >= 6 ? 'bg-amber-100' :
+                            'bg-gray-100'
+                          }`}>
+                            <span className={`font-bold ${
+                              trade.wheelScore >= 8 ? 'text-emerald-700' :
+                              trade.wheelScore >= 7 ? 'text-green-700' :
+                              trade.wheelScore >= 6 ? 'text-amber-700' :
+                              'text-gray-500'
+                            }`}>{trade.wheelScore?.toFixed(1) || '—'}</span>
                           </div>
-                          <p className="text-sm text-green-700">Keep $285 premium. Repeat.</p>
-                        </div>
-                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                          <div className="flex items-center gap-2 mb-1">
-                            <ArrowDown className="w-4 h-4 text-blue-600" />
-                            <p className="text-sm font-medium text-blue-800">If Assigned (18%)</p>
+                          <div className="text-left">
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-gray-900">{trade.ticker}</p>
+                              {trade.wheelScore && <StarRating rating={Math.round(trade.wheelScore / 2)} />}
+                            </div>
+                            <p className="text-sm text-gray-500">{trade.name || trade.recommendation || 'Analyzing...'}</p>
                           </div>
-                          <p className="text-sm text-blue-700">Buy 100 shares at $177.15 effective. Sell calls.</p>
                         </div>
-                      </div>
-
-                      <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
-                        <p className="text-sm font-medium text-emerald-800 mb-1">✓ Assignment Comfort Test: PASSED</p>
-                        <p className="text-xs text-emerald-700">Would own AAPL at $177.15. Quality company, strong moat, 4.5% below current price.</p>
-                      </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            {trade.verdict && (
+                              <span className={`px-2 py-1 text-xs font-medium rounded ${
+                                trade.verdict === 'SELL' ? 'bg-green-100 text-green-700' :
+                                trade.verdict === 'WAIT' ? 'bg-amber-100 text-amber-700' :
+                                'bg-red-100 text-red-700'
+                              }`}>{trade.verdict}</span>
+                            )}
+                            {trade.premium && (
+                              <p className="text-sm text-gray-500 mt-1">${trade.premium} premium</p>
+                            )}
+                          </div>
+                          <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedTrade === trade.ticker ? 'rotate-180' : ''}`} />
+                        </div>
+                      </button>
                     </div>
-                  )}
+                  ))}
                 </div>
+              )}
 
-                {/* More trade cards */}
-                <div className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer border-b border-gray-100">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                      <span className="text-emerald-700 font-bold">8.7</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-gray-900">KO</p>
-                        <StarRating rating={5} />
-                      </div>
-                      <p className="text-sm text-gray-500">Cash-Secured Put • 35 DTE</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-emerald-600">$92 premium</p>
-                    <p className="text-sm text-gray-500">1.5% monthly • 18.4% ann.</p>
-                  </div>
-                </div>
-
-                <div className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer border-b border-gray-100">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
-                      <span className="text-amber-700 font-bold">7.2</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-gray-900">MSFT</p>
-                        <StarRating rating={4} />
-                      </div>
-                      <p className="text-sm text-gray-500">Cash-Secured Put • 35 DTE</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-emerald-600">$470 premium</p>
-                    <p className="text-sm text-gray-500">1.2% monthly • 14.5% ann.</p>
+              {/* Account Snapshot */}
+              {analysisResult.accountSnapshot && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="font-bold text-gray-900 mb-3">Account Snapshot</h3>
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-auto">
+                      {analysisResult.accountSnapshot}
+                    </pre>
                   </div>
                 </div>
+              )}
 
-                <div className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
-                      <span className="text-gray-500 font-bold">5.8</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-gray-400">JNJ</p>
-                        <StarRating rating={3} />
-                      </div>
-                      <p className="text-sm text-gray-400">Earnings in 12 days — SKIP</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">⚠️ Earnings Risk</span>
+              {/* Recommended Trades Section */}
+              {analysisResult.recommendedTrades && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="font-bold text-gray-900 mb-3">Recommended Trades</h3>
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-auto">
+                      {analysisResult.recommendedTrades}
+                    </pre>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Summary */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-                <h3 className="font-medium text-emerald-900 mb-3">📋 Action Summary</h3>
-                <div className="space-y-2 text-sm text-emerald-800">
-                  <p><strong>Trade 1:</strong> Sell AAPL Feb 21 $180 Put @ $2.85 — Collect $285</p>
-                  <p><strong>Trade 2:</strong> Sell KO Feb 21 $60 Put @ $0.92 — Collect $92</p>
-                  <p><strong>Skip:</strong> MSFT (capital intensive), JNJ (earnings soon)</p>
+              {/* Action Summary */}
+              {analysisResult.actionSummary && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6">
+                  <h3 className="font-medium text-emerald-900 mb-3">Action Summary</h3>
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap text-sm text-emerald-800 overflow-auto">
+                      {analysisResult.actionSummary}
+                    </pre>
+                  </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-emerald-200">
-                  <p className="text-emerald-900"><strong>Total Premium This Week:</strong> $377</p>
-                  <p className="text-emerald-900"><strong>Capital Deployed:</strong> $24,000</p>
+              )}
+
+              {/* Income Dashboard */}
+              {analysisResult.incomeDashboard && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="font-bold text-gray-900 mb-3">Income Dashboard</h3>
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-auto">
+                      {analysisResult.incomeDashboard}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* Full Analysis */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h3 className="font-bold text-gray-900 mb-3">Full Analysis</h3>
+                <div className="prose prose-sm max-w-none">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-auto max-h-[600px]">
+                    {analysisResult.fullAnalysis || 'No detailed analysis available.'}
+                  </pre>
                 </div>
               </div>
             </div>
