@@ -701,6 +701,15 @@ JNJ"
                       {/* Expanded Trade Details */}
                       {expandedTrade === trade.ticker && (
                         <div className="px-4 pb-4 bg-gray-50 border-t border-gray-100">
+                          {/* Trade Type Badge */}
+                          {trade.tradeType && (
+                            <div className="py-2">
+                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
+                                {trade.tradeType}
+                              </span>
+                            </div>
+                          )}
+
                           {/* Quick Stats Grid */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 py-4">
                             {trade.currentPrice && (
@@ -733,10 +742,28 @@ JNJ"
                                 <p className="font-bold text-gray-900">{trade.delta}</p>
                               </div>
                             )}
-                            {trade.ivRank && (
+                            {trade.ivRank != null && (
                               <div className="bg-white rounded-lg p-3 border border-gray-200">
                                 <p className="text-xs text-gray-500">IV Rank</p>
                                 <p className={`font-bold ${trade.ivRank >= 50 ? 'text-emerald-600' : 'text-amber-600'}`}>{trade.ivRank}%</p>
+                              </div>
+                            )}
+                            {trade.collateralRequired && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Collateral Required</p>
+                                <p className="font-bold text-gray-900">${trade.collateralRequired.toLocaleString()}</p>
+                              </div>
+                            )}
+                            {trade.maxProfit && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Max Profit</p>
+                                <p className="font-bold text-emerald-600">${trade.maxProfit}</p>
+                              </div>
+                            )}
+                            {trade.breakeven && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Breakeven</p>
+                                <p className="font-bold text-gray-900">${trade.breakeven}</p>
                               </div>
                             )}
                             {trade.monthlyReturn && (
@@ -753,13 +780,28 @@ JNJ"
                             )}
                           </div>
 
-                          {/* Expiration Date */}
-                          {trade.expirationDate && (
-                            <div className="mb-3">
-                              <span className="text-sm text-gray-500">Expiration: </span>
-                              <span className="text-sm font-medium text-gray-700">{trade.expirationDate}</span>
-                            </div>
-                          )}
+                          {/* Expiration & Earnings Row */}
+                          <div className="flex flex-wrap gap-4 mb-3 text-sm">
+                            {trade.expirationDate && (
+                              <div>
+                                <span className="text-gray-500">Expiration: </span>
+                                <span className="font-medium text-gray-700">{trade.expirationDate}</span>
+                              </div>
+                            )}
+                            {trade.earningsDate && (
+                              <div>
+                                <span className="text-gray-500">Earnings: </span>
+                                <span className="font-medium text-gray-700">{trade.earningsDate}</span>
+                                {trade.earningsRisk && (
+                                  <span className={`ml-2 px-2 py-0.5 text-xs rounded ${
+                                    trade.earningsRisk === 'HIGH' ? 'bg-red-100 text-red-700' :
+                                    trade.earningsRisk === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
+                                    'bg-green-100 text-green-700'
+                                  }`}>{trade.earningsRisk} RISK</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
 
                           {/* Assignment Comfort */}
                           {trade.assignmentComfort && (
@@ -777,7 +819,58 @@ JNJ"
                             </div>
                           )}
 
-                          {/* Full Details */}
+                          {/* Risks */}
+                          {trade.risks && trade.risks.length > 0 && (
+                            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                              <p className="text-xs font-medium text-red-800 mb-1">Risk Factors</p>
+                              <ul className="text-sm text-red-700 list-disc list-inside">
+                                {trade.risks.map((risk, i) => (
+                                  <li key={i}>{risk}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Score Breakdown */}
+                          {trade.scoreBreakdown && (
+                            <div className="mb-3 p-3 bg-gray-100 border border-gray-200 rounded-lg">
+                              <p className="text-xs font-medium text-gray-700 mb-2">Wheel Score Breakdown</p>
+                              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                                {trade.scoreBreakdown.ivRank != null && (
+                                  <div className="text-center">
+                                    <p className="text-gray-500">IV Rank</p>
+                                    <p className="font-bold text-gray-700">{trade.scoreBreakdown.ivRank}/2</p>
+                                  </div>
+                                )}
+                                {trade.scoreBreakdown.premiumYield != null && (
+                                  <div className="text-center">
+                                    <p className="text-gray-500">Premium</p>
+                                    <p className="font-bold text-gray-700">{trade.scoreBreakdown.premiumYield}/2</p>
+                                  </div>
+                                )}
+                                {trade.scoreBreakdown.technicalSetup != null && (
+                                  <div className="text-center">
+                                    <p className="text-gray-500">Technicals</p>
+                                    <p className="font-bold text-gray-700">{trade.scoreBreakdown.technicalSetup}/2</p>
+                                  </div>
+                                )}
+                                {trade.scoreBreakdown.fundamentals != null && (
+                                  <div className="text-center">
+                                    <p className="text-gray-500">Fundamentals</p>
+                                    <p className="font-bold text-gray-700">{trade.scoreBreakdown.fundamentals}/2</p>
+                                  </div>
+                                )}
+                                {trade.scoreBreakdown.assignmentComfort != null && (
+                                  <div className="text-center">
+                                    <p className="text-gray-500">Comfort</p>
+                                    <p className="font-bold text-gray-700">{trade.scoreBreakdown.assignmentComfort}/2</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Full Details (fallback for non-JSON responses) */}
                           {trade.details && (
                             <details className="mt-3">
                               <summary className="text-sm font-medium text-gray-600 cursor-pointer hover:text-gray-900">
@@ -797,25 +890,147 @@ JNJ"
                 </div>
               )}
 
-              {/* Account Snapshot */}
-              {analysisResult.accountSnapshot && (
+              {/* Session Summary (from JSON) */}
+              {analysisResult.summaryData && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-100">
+                    <h2 className="font-bold text-gray-900">Session Summary</h2>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
+                    {analysisResult.summaryData.totalTrades != null && (
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-2xl font-bold text-gray-900">{analysisResult.summaryData.totalTrades}</p>
+                        <p className="text-xs text-gray-500">Total Trades</p>
+                      </div>
+                    )}
+                    {analysisResult.summaryData.totalPremium != null && (
+                      <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                        <p className="text-2xl font-bold text-emerald-600">${analysisResult.summaryData.totalPremium}</p>
+                        <p className="text-xs text-gray-500">Total Premium</p>
+                      </div>
+                    )}
+                    {analysisResult.summaryData.totalCollateral != null && (
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-2xl font-bold text-gray-900">${analysisResult.summaryData.totalCollateral.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">Collateral Used</p>
+                      </div>
+                    )}
+                    {analysisResult.summaryData.portfolioYield != null && (
+                      <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                        <p className="text-2xl font-bold text-emerald-600">{analysisResult.summaryData.portfolioYield}%</p>
+                        <p className="text-xs text-gray-500">Portfolio Yield</p>
+                      </div>
+                    )}
+                  </div>
+                  {analysisResult.summaryData.riskLevel && (
+                    <div className="px-4 pb-4">
+                      <span className={`px-3 py-1 text-sm font-medium rounded-full ${
+                        analysisResult.summaryData.riskLevel === 'LOW' ? 'bg-green-100 text-green-700' :
+                        analysisResult.summaryData.riskLevel === 'MODERATE' ? 'bg-amber-100 text-amber-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {analysisResult.summaryData.riskLevel} Risk
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Skip List (from JSON) */}
+              {analysisResult.skipList && analysisResult.skipList.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-100">
+                    <h2 className="font-bold text-gray-900">Skip This Week</h2>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {analysisResult.skipList.map((item, index) => (
+                      <div key={item.ticker || index} className="p-4 flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-gray-900">{item.ticker} {item.name && <span className="text-gray-500">- {item.name}</span>}</p>
+                          <p className="text-sm text-red-600">{item.reason}</p>
+                        </div>
+                        {item.revisitDate && (
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                            Revisit: {item.revisitDate}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Watchlist Items (from JSON) */}
+              {analysisResult.watchlistItems && analysisResult.watchlistItems.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-100">
+                    <h2 className="font-bold text-gray-900">Watch for Next Session</h2>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {analysisResult.watchlistItems.map((item, index) => (
+                      <div key={item.ticker || index} className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-gray-900">{item.ticker} {item.name && <span className="text-gray-500">- {item.name}</span>}</p>
+                            <p className="text-sm text-amber-600 mt-1">{item.triggerCondition}</p>
+                          </div>
+                          {item.potentialPremium && (
+                            <span className="text-sm font-medium text-emerald-600">
+                              ${item.potentialPremium} potential
+                            </span>
+                          )}
+                        </div>
+                        {(item.potentialStrike || item.currentIV) && (
+                          <div className="mt-2 flex gap-4 text-xs text-gray-500">
+                            {item.potentialStrike && <span>Strike: ${item.potentialStrike}</span>}
+                            {item.currentIV && <span>Current IV: {item.currentIV}%</span>}
+                            {item.targetIV && <span>Target IV: {item.targetIV}%</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Key Dates (from JSON) */}
+              {analysisResult.keyDates && analysisResult.keyDates.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-100">
+                    <h2 className="font-bold text-gray-900">Key Dates</h2>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {analysisResult.keyDates.map((item, index) => (
+                      <div key={index} className="p-4 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full ${
+                            item.impact === 'HIGH' ? 'bg-red-500' :
+                            item.impact === 'MEDIUM' ? 'bg-amber-500' :
+                            'bg-green-500'
+                          }`} />
+                          <div>
+                            <p className="font-medium text-gray-900">{item.event}</p>
+                            <p className="text-sm text-gray-500">{item.date}</p>
+                          </div>
+                        </div>
+                        {item.action && (
+                          <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                            {item.action}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Account Snapshot (text fallback) */}
+              {analysisResult.accountSnapshot && !analysisResult.summaryData && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                   <h3 className="font-bold text-gray-900 mb-3">Account Snapshot</h3>
                   <div className="prose prose-sm max-w-none">
                     <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-auto">
                       {analysisResult.accountSnapshot}
-                    </pre>
-                  </div>
-                </div>
-              )}
-
-              {/* Recommended Trades Section */}
-              {analysisResult.recommendedTrades && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="font-bold text-gray-900 mb-3">Recommended Trades</h3>
-                  <div className="prose prose-sm max-w-none">
-                    <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-auto">
-                      {analysisResult.recommendedTrades}
                     </pre>
                   </div>
                 </div>

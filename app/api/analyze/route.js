@@ -1234,7 +1234,144 @@ Be specific, practical, and conservative. Always prioritize capital preservation
 
 ---
 
+## PART G — STRUCTURED DATA (REQUIRED)
+
+**IMPORTANT: You MUST include this JSON block at the very end of your response. This is used for parsing.**
+
+\`\`\`json
+{
+  "mode": "Cash-Secured|Margin",
+  "sessionType": "New Trades|Position Review|Both",
+  "accountSnapshot": {
+    "cashAvailable": 30000,
+    "buyingPower": 100000,
+    "currentExposure": 20000,
+    "maxSinglePosition": 15000
+  },
+  "trades": [
+    {
+      "ticker": "AAPL",
+      "name": "Apple Inc.",
+      "wheelScore": 8.3,
+      "verdict": "SELL|WAIT|SKIP",
+      "tradeType": "cash-secured put|covered call",
+      "currentPrice": 185.50,
+      "strike": 180.00,
+      "premium": 2.45,
+      "delta": 0.18,
+      "dte": 35,
+      "expirationDate": "Feb 21, 2025",
+      "ivRank": 45,
+      "monthlyReturn": 1.36,
+      "annualizedReturn": 16.3,
+      "collateralRequired": 18000,
+      "maxProfit": 245,
+      "breakeven": 177.55,
+      "assignmentComfort": "Yes - would own at $177.55 basis",
+      "earningsDate": "Jan 30, 2025",
+      "earningsRisk": "LOW|MEDIUM|HIGH",
+      "rationale": "Strong premium with comfortable assignment level. IV rank elevated post-earnings provides good entry.",
+      "risks": ["Earnings in 2 weeks", "Tech sector rotation risk"],
+      "scoreBreakdown": {
+        "ivRank": 2.0,
+        "premiumYield": 1.8,
+        "technicalSetup": 1.5,
+        "fundamentals": 1.5,
+        "assignmentComfort": 1.5
+      }
+    }
+  ],
+  "skipList": [
+    {
+      "ticker": "TSLA",
+      "name": "Tesla Inc.",
+      "reason": "Earnings in 5 days - too risky",
+      "revisitDate": "After Feb 5 earnings"
+    }
+  ],
+  "watchlist": [
+    {
+      "ticker": "NVDA",
+      "name": "NVIDIA Corporation",
+      "triggerCondition": "Wait for IV Rank above 40",
+      "currentIV": 32,
+      "targetIV": 40,
+      "potentialStrike": 850,
+      "potentialPremium": 15.00
+    }
+  ],
+  "summary": {
+    "totalTrades": 3,
+    "totalPremium": 735,
+    "totalCollateral": 45000,
+    "estimatedMonthlyIncome": 735,
+    "portfolioYield": 1.6,
+    "riskLevel": "LOW|MODERATE|HIGH"
+  },
+  "keyDates": [
+    {
+      "date": "Jan 30, 2025",
+      "event": "AAPL Earnings",
+      "impact": "HIGH",
+      "action": "Close AAPL position before"
+    }
+  ]
+}
+\`\`\`
+
+**Fill in all fields with actual data from your analysis. Use null for any field you cannot determine.**
+
+---
+
 # END OF PROMPT`
+}
+
+// Extract JSON data block from response
+function extractJsonData(text) {
+  try {
+    // Look for JSON code block
+    const jsonMatch = text.match(/```json\s*\n?([\s\S]*?)\n?```/i)
+    if (jsonMatch && jsonMatch[1]) {
+      const jsonStr = jsonMatch[1].trim()
+      const data = JSON.parse(jsonStr)
+      return data
+    }
+  } catch (error) {
+    console.error('Failed to parse JSON data:', error.message)
+  }
+  return null
+}
+
+// Convert JSON trades to standard format
+function convertJsonTrades(jsonData, watchlistTickers) {
+  if (!jsonData || !jsonData.trades) return null
+
+  return jsonData.trades.map(trade => ({
+    ticker: trade.ticker,
+    name: trade.name,
+    wheelScore: trade.wheelScore,
+    verdict: trade.verdict,
+    tradeType: trade.tradeType,
+    currentPrice: trade.currentPrice,
+    strike: trade.strike,
+    premium: trade.premium,
+    delta: trade.delta,
+    dte: trade.dte,
+    expirationDate: trade.expirationDate,
+    ivRank: trade.ivRank,
+    monthlyReturn: trade.monthlyReturn,
+    annualizedReturn: trade.annualizedReturn,
+    collateralRequired: trade.collateralRequired,
+    maxProfit: trade.maxProfit,
+    breakeven: trade.breakeven,
+    assignmentComfort: trade.assignmentComfort,
+    earningsDate: trade.earningsDate,
+    earningsRisk: trade.earningsRisk,
+    rationale: trade.rationale,
+    risks: trade.risks,
+    scoreBreakdown: trade.scoreBreakdown,
+    details: null // No raw details when using JSON
+  }))
 }
 
 function parseResponse(responseText, formData) {
@@ -1245,17 +1382,29 @@ function parseResponse(responseText, formData) {
         .filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t))
     : []
 
+  // First, try to extract structured JSON data (most reliable)
+  const jsonData = extractJsonData(responseText)
+
+  // Use JSON data if available, otherwise fall back to text parsing
   const result = {
-    mode: extractMode(responseText),
-    summary: extractSummary(responseText),
-    trades: extractTrades(responseText, watchlistTickers),
+    mode: jsonData?.mode || extractMode(responseText),
+    summary: jsonData?.summary?.estimatedMonthlyIncome
+      ? `Estimated monthly income: $${jsonData.summary.estimatedMonthlyIncome}. ${jsonData.summary.totalTrades || 0} trades recommended.`
+      : extractSummary(responseText),
+    trades: convertJsonTrades(jsonData, watchlistTickers) || extractTrades(responseText, watchlistTickers),
+    skipList: jsonData?.skipList || null,
+    watchlistItems: jsonData?.watchlist || null,
+    summaryData: jsonData?.summary || null,
+    keyDates: jsonData?.keyDates || null,
+    accountSnapshotData: jsonData?.accountSnapshot || null,
     accountSnapshot: extractSection(responseText, 'PART A', 'PART B') || extractSection(responseText, 'ACCOUNT SNAPSHOT', 'PART B'),
     positionReview: extractSection(responseText, 'PART B', 'PART C') || extractSection(responseText, 'POSITION REVIEW', 'PART C'),
     watchlistAnalysis: extractSection(responseText, 'PART C', 'PART D') || extractSection(responseText, 'WATCHLIST ANALYSIS', 'PART D'),
     recommendedTrades: extractSection(responseText, 'PART D', 'PART E') || extractSection(responseText, 'RECOMMENDED TRADES', 'PART E'),
     actionSummary: extractSection(responseText, 'PART E', 'PART F') || extractSection(responseText, 'ACTION SUMMARY', 'PART F'),
-    incomeDashboard: extractSection(responseText, 'PART F', null) || extractSection(responseText, 'INCOME DASHBOARD', null),
-    fullAnalysis: responseText
+    incomeDashboard: extractSection(responseText, 'PART F', 'PART G') || extractSection(responseText, 'INCOME DASHBOARD', 'PART G'),
+    fullAnalysis: responseText,
+    jsonParsed: jsonData !== null
   }
 
   return result
