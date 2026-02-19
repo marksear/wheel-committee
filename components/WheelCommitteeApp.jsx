@@ -41,6 +41,8 @@ export default function WheelCommitteeApp() {
     targetDelta: '0.18',
     targetDte: '2',
     marketOutlook: 'neutral',
+    // Strategy Mode
+    strategyMode: 'wheel',
   });
 
   const steps = [
@@ -58,6 +60,26 @@ export default function WheelCommitteeApp() {
       .split('\n')
       .map(line => line.trim().toUpperCase())
       .filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t));
+
+    if (formData.strategyMode === 'pmcc') {
+      const steps = [
+        'Loading account data...',
+        'Checking available capital...',
+      ];
+      tickers.forEach(ticker => {
+        steps.push(`Screening ${ticker} for LEAPS...`);
+      });
+      steps.push(
+        'Identifying LEAPS candidates (Delta ≥0.80)...',
+        'Checking DTE >365 days...',
+        'Evaluating short call premiums...',
+        'Comparing extrinsic values...',
+        'Calculating max profit spreads...',
+        'Estimating capital savings...',
+        'Generating PMCC recommendations...'
+      );
+      return steps;
+    }
 
     const steps = [
       'Loading account data...',
@@ -107,7 +129,8 @@ export default function WheelCommitteeApp() {
     }, stepInterval);
 
     try {
-      const response = await fetch('/api/analyze', {
+      const apiEndpoint = formData.strategyMode === 'pmcc' ? '/api/pmcc' : '/api/analyze';
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ formData })
@@ -469,7 +492,52 @@ JNJ"
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Trade Settings</h2>
             <p className="text-gray-600">Configure your trade preferences</p>
-            
+
+            {/* Strategy Mode Selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Strategy Mode</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setFormData({ ...formData, strategyMode: 'wheel' })}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    formData.strategyMode === 'wheel'
+                      ? 'border-emerald-500 bg-emerald-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <RefreshCw className={`w-5 h-5 ${formData.strategyMode === 'wheel' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                    <span className="font-bold text-gray-900">The Wheel</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Cash-secured puts & covered calls</p>
+                  <p className="text-xs text-gray-400 mt-1">Classic income strategy</p>
+                </button>
+                <button
+                  onClick={() => setFormData({ ...formData, strategyMode: 'pmcc' })}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    formData.strategyMode === 'pmcc'
+                      ? 'border-teal-500 bg-teal-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className={`w-5 h-5 ${formData.strategyMode === 'pmcc' ? 'text-teal-600' : 'text-gray-400'}`} />
+                    <span className="font-bold text-gray-900">PMCC</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Poor Man's Covered Call via LEAPS</p>
+                  <p className="text-xs text-gray-400 mt-1">~70-80% less capital than owning shares</p>
+                </button>
+              </div>
+            </div>
+
+            {formData.strategyMode === 'pmcc' && (
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
+                <p className="text-sm text-teal-800">
+                  <strong>PMCC Mode:</strong> We'll identify LEAPS calls (Delta ≥0.80, &gt;365 DTE) and pair them with short-term calls to generate income — using ~70-80% less capital than owning 100 shares.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Target Delta</label>
@@ -548,11 +616,13 @@ JNJ"
               </div>
             </div>
 
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-              <p className="text-sm text-emerald-800">
-                <strong>Settings Summary:</strong> Targeting ~{parseFloat(formData.targetDelta) * 100}% delta puts, 
-                {formData.targetDte} DTE, on stocks scoring {formData.minWheelScore}+. 
-                Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month in premium.
+            <div className={`${formData.strategyMode === 'pmcc' ? 'bg-teal-50 border-teal-200' : 'bg-emerald-50 border-emerald-200'} border rounded-lg p-4`}>
+              <p className={`text-sm ${formData.strategyMode === 'pmcc' ? 'text-teal-800' : 'text-emerald-800'}`}>
+                {formData.strategyMode === 'pmcc' ? (
+                  <><strong>PMCC Summary:</strong> Scanning watchlist for LEAPS candidates (Delta ≥0.80, &gt;365 DTE) with profitable short call pairings. Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month income with reduced capital.</>
+                ) : (
+                  <><strong>Settings Summary:</strong> Targeting ~{parseFloat(formData.targetDelta) * 100}% delta puts, {formData.targetDte} DTE, on stocks scoring {formData.minWheelScore}+. Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month in premium.</>
+                )}
               </p>
             </div>
           </div>
@@ -567,7 +637,9 @@ JNJ"
                 <div className="absolute inset-0 border-4 border-emerald-500 rounded-full border-t-transparent animate-spin"></div>
                 <RefreshCw className="absolute inset-0 m-auto w-8 h-8 text-emerald-600" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-900">Wheel Committee in Session</h2>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {formData.strategyMode === 'pmcc' ? 'PMCC Scanner Running' : 'Wheel Committee in Session'}
+              </h2>
 
               <div className="max-w-md mx-auto text-left bg-gray-50 rounded-xl p-4">
                 <div className="space-y-2">
@@ -621,7 +693,7 @@ JNJ"
                     <p className="text-emerald-200 text-sm">Wheel Committee Report</p>
                     <h1 className="text-2xl font-bold mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h1>
                     <p className="text-emerald-300 mt-2">
-                      {analysisResult.mode || (formData.mode === 'cash_secured' ? 'Cash-Secured Mode' : 'Margin Mode')} • {formData.watchlist.split('\n').filter(t => t.trim()).length} stocks analyzed
+                      {formData.strategyMode === 'pmcc' ? 'PMCC Mode' : (analysisResult.mode || (formData.mode === 'cash_secured' ? 'Cash-Secured Mode' : 'Margin Mode'))} • {formData.watchlist.split('\n').filter(t => t.trim()).length} stocks analyzed
                     </p>
                   </div>
                 </div>
@@ -646,8 +718,160 @@ JNJ"
                 </div>
               </div>
 
-              {/* Trade Recommendations from API */}
-              {analysisResult.trades && analysisResult.trades.length > 0 && (
+              {/* PMCC Results Table */}
+              {formData.strategyMode === 'pmcc' && analysisResult.pmccTrades && analysisResult.pmccTrades.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-100">
+                    <h2 className="font-bold text-gray-900">PMCC Analysis — LEAPS + Short Call Pairings</h2>
+                    <p className="text-sm text-gray-500 mt-1">Poor Man's Covered Call candidates ranked by capital efficiency</p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">Ticker</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">LEAPS Strike</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">DTE</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">Delta</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">Short Call</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">Premium</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">Extrinsic</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">Max Profit</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">Capital Req.</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">Savings</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">Verdict</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analysisResult.pmccTrades.map((trade, index) => (
+                          <tr
+                            key={trade.ticker || index}
+                            className={`border-b border-gray-100 last:border-b-0 cursor-pointer transition-colors ${
+                              expandedTrade === trade.ticker ? 'bg-teal-50' : 'hover:bg-gray-50'
+                            }`}
+                            onClick={() => setExpandedTrade(expandedTrade === trade.ticker ? null : trade.ticker)}
+                          >
+                            <td className="px-4 py-3 font-bold text-gray-900">{trade.ticker}</td>
+                            <td className="px-4 py-3 text-gray-700">{trade.leapsStrike != null ? `$${trade.leapsStrike}` : '—'}</td>
+                            <td className="px-4 py-3 text-gray-700">{trade.leapsDTE ?? '—'}</td>
+                            <td className="px-4 py-3 text-gray-700">{trade.leapsDelta ?? '—'}</td>
+                            <td className="px-4 py-3 text-gray-700">{trade.shortCallStrike != null ? `$${trade.shortCallStrike}` : '—'}</td>
+                            <td className="px-4 py-3 text-emerald-600 font-medium">{trade.shortCallPremium != null ? `$${trade.shortCallPremium}` : '—'}</td>
+                            <td className="px-4 py-3 text-gray-700">{trade.extrinsicValue != null ? `$${trade.extrinsicValue}` : '—'}</td>
+                            <td className="px-4 py-3 text-emerald-600 font-medium">{trade.maxProfit != null ? `$${trade.maxProfit}` : '—'}</td>
+                            <td className="px-4 py-3 text-gray-700">{trade.capitalRequired != null ? `$${trade.capitalRequired.toLocaleString()}` : '—'}</td>
+                            <td className="px-4 py-3">
+                              {trade.capitalSaved != null ? (
+                                <span className="px-2 py-1 bg-teal-100 text-teal-700 text-xs font-medium rounded">
+                                  {trade.capitalSaved}%
+                                </span>
+                              ) : '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              {trade.verdict && (
+                                <span className={`px-2 py-1 text-xs font-medium rounded ${
+                                  trade.verdict === 'BUY' || trade.verdict === 'SELL' ? 'bg-green-100 text-green-700' :
+                                  trade.verdict === 'WAIT' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>{trade.verdict}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Expanded PMCC trade detail */}
+                  {analysisResult.pmccTrades.map((trade) => (
+                    expandedTrade === trade.ticker && (
+                      <div key={`detail-${trade.ticker}`} className="px-4 pb-4 bg-teal-50 border-t border-teal-200">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 py-4">
+                          {trade.capitalRequired != null && (
+                            <div className="bg-white rounded-lg p-3 border border-gray-200">
+                              <p className="text-xs text-gray-500">Capital Required</p>
+                              <p className="font-bold text-gray-900">${trade.capitalRequired.toLocaleString()}</p>
+                            </div>
+                          )}
+                          {trade.capitalSaved != null && (
+                            <div className="bg-teal-100 rounded-lg p-3 border border-teal-200">
+                              <p className="text-xs text-teal-600">Capital Saved vs Shares</p>
+                              <p className="font-bold text-teal-700">{trade.capitalSaved}%</p>
+                            </div>
+                          )}
+                          {trade.maxProfit != null && (
+                            <div className="bg-white rounded-lg p-3 border border-gray-200">
+                              <p className="text-xs text-gray-500">Max Profit</p>
+                              <p className="font-bold text-emerald-600">${trade.maxProfit}</p>
+                            </div>
+                          )}
+                          {trade.shortCallPremium != null && trade.extrinsicValue != null && (
+                            <div className={`rounded-lg p-3 border ${
+                              trade.shortCallPremium > trade.extrinsicValue
+                                ? 'bg-emerald-50 border-emerald-200'
+                                : 'bg-red-50 border-red-200'
+                            }`}>
+                              <p className="text-xs text-gray-500">Premium vs Extrinsic</p>
+                              <p className={`font-bold ${
+                                trade.shortCallPremium > trade.extrinsicValue
+                                  ? 'text-emerald-600'
+                                  : 'text-red-600'
+                              }`}>
+                                ${trade.shortCallPremium} vs ${trade.extrinsicValue} {trade.shortCallPremium > trade.extrinsicValue ? '✓' : '✗'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {trade.rationale && (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-3">
+                            <p className="text-xs font-medium text-amber-800 mb-1">Rationale</p>
+                            <p className="text-sm text-amber-700">{trade.rationale}</p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  ))}
+                </div>
+              )}
+
+              {/* PMCC Summary */}
+              {formData.strategyMode === 'pmcc' && analysisResult.pmccSummary && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-100">
+                    <h2 className="font-bold text-gray-900">PMCC Summary</h2>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
+                    {analysisResult.pmccSummary.totalCandidates != null && (
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-2xl font-bold text-gray-900">{analysisResult.pmccSummary.totalCandidates}</p>
+                        <p className="text-xs text-gray-500">PMCC Candidates</p>
+                      </div>
+                    )}
+                    {analysisResult.pmccSummary.totalCapitalRequired != null && (
+                      <div className="text-center p-3 bg-teal-50 rounded-lg">
+                        <p className="text-2xl font-bold text-teal-600">${analysisResult.pmccSummary.totalCapitalRequired.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">Total Capital Needed</p>
+                      </div>
+                    )}
+                    {analysisResult.pmccSummary.avgCapitalSaved != null && (
+                      <div className="text-center p-3 bg-teal-50 rounded-lg">
+                        <p className="text-2xl font-bold text-teal-600">{analysisResult.pmccSummary.avgCapitalSaved}%</p>
+                        <p className="text-xs text-gray-500">Avg Capital Saved</p>
+                      </div>
+                    )}
+                    {analysisResult.pmccSummary.totalMaxProfit != null && (
+                      <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                        <p className="text-2xl font-bold text-emerald-600">${analysisResult.pmccSummary.totalMaxProfit.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">Total Max Profit</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Trade Recommendations from API (Wheel mode) */}
+              {formData.strategyMode !== 'pmcc' && analysisResult.trades && analysisResult.trades.length > 0 && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="p-4 border-b border-gray-100">
                     <h2 className="font-bold text-gray-900">Wheel Score™ Analysis</h2>
@@ -1166,16 +1390,24 @@ JNJ"
 
         return (
           <div className="text-center py-12 space-y-6">
-            <RefreshCw className="w-16 h-16 text-emerald-500 mx-auto" />
-            <h2 className="text-2xl font-bold text-gray-900">Ready to Analyze</h2>
+            {formData.strategyMode === 'pmcc' ? (
+              <TrendingUp className="w-16 h-16 text-teal-500 mx-auto" />
+            ) : (
+              <RefreshCw className="w-16 h-16 text-emerald-500 mx-auto" />
+            )}
+            <h2 className="text-2xl font-bold text-gray-900">
+              {formData.strategyMode === 'pmcc' ? 'Ready to Scan for PMCC' : 'Ready to Analyze'}
+            </h2>
             <p className="text-gray-600 max-w-md mx-auto">
-              The Wheel Committee will calculate Wheel Scores™ and find the best premium opportunities.
+              {formData.strategyMode === 'pmcc'
+                ? 'We\'ll identify LEAPS candidates and pair them with short calls for capital-efficient income.'
+                : 'The Wheel Committee will calculate Wheel Scores™ and find the best premium opportunities.'}
             </p>
             <button
               onClick={runAnalysis}
               className="px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors shadow-lg"
             >
-              Find Wheel Opportunities
+              {formData.strategyMode === 'pmcc' ? 'Find PMCC Opportunities' : 'Find Wheel Opportunities'}
             </button>
           </div>
         );
