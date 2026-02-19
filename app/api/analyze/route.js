@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { fetchAllMarketData, formatMarketDataForPrompt } from '@/lib/yahooFinance'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -8,8 +9,26 @@ export async function POST(request) {
   try {
     const { formData } = await request.json()
 
-    // Build the full Wheel Committee prompt
-    const prompt = buildFullPrompt(formData)
+    // Extract tickers from watchlist
+    const tickers = formData.watchlist
+      ? formData.watchlist.split('\n').map(t => t.trim().toUpperCase()).filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t))
+      : []
+
+    // Fetch live market data for all tickers in parallel
+    let marketData = {}
+    let marketDataText = ''
+    if (tickers.length > 0) {
+      try {
+        marketData = await fetchAllMarketData(tickers)
+        marketDataText = formatMarketDataForPrompt(marketData)
+      } catch (err) {
+        console.error('Market data fetch failed, continuing without live data:', err.message)
+        marketDataText = '**Live market data unavailable.** Use your best estimates based on recent knowledge.\n'
+      }
+    }
+
+    // Build the full Wheel Committee prompt with live data
+    const prompt = buildFullPrompt(formData, marketDataText)
 
     // Call Claude API with extended token limit for comprehensive analysis
     const message = await client.messages.create({
@@ -37,7 +56,7 @@ export async function POST(request) {
   }
 }
 
-function buildFullPrompt(formData) {
+function buildFullPrompt(formData, marketDataText = '') {
   const hasWatchlist = formData.watchlist && formData.watchlist.trim().length > 0
   const hasPositions = formData.currentPositions && formData.currentPositions.trim().length > 0
 
@@ -1222,6 +1241,16 @@ ${hasWatchlist ? `## WATCHLIST TO ANALYZE
 \`\`\`
 ${formData.watchlist}
 \`\`\`
+
+---` : ''}
+
+${marketDataText ? `# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# LIVE MARKET DATA (from Yahoo Finance)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**IMPORTANT: Use the live data below for your analysis. These are real-time prices, IV, and options chain data. Do NOT estimate values that are provided here — use the actual numbers. If data for a ticker is marked as unavailable, use your best estimates and note it.**
+
+${marketDataText}
 
 ---` : ''}
 

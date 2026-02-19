@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { fetchAllMarketData, formatMarketDataForPmccPrompt } from '@/lib/yahooFinance'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -8,7 +9,24 @@ export async function POST(request) {
   try {
     const { formData } = await request.json()
 
-    const prompt = buildPmccPrompt(formData)
+    // Extract tickers from watchlist
+    const tickers = formData.watchlist
+      ? formData.watchlist.split('\n').map(t => t.trim().toUpperCase()).filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t))
+      : []
+
+    // Fetch live market data for all tickers in parallel
+    let marketDataText = ''
+    if (tickers.length > 0) {
+      try {
+        const marketData = await fetchAllMarketData(tickers)
+        marketDataText = formatMarketDataForPmccPrompt(marketData)
+      } catch (err) {
+        console.error('Market data fetch failed, continuing without live data:', err.message)
+        marketDataText = '**Live market data unavailable.** Use your best estimates based on recent knowledge.\n'
+      }
+    }
+
+    const prompt = buildPmccPrompt(formData, marketDataText)
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -34,7 +52,7 @@ export async function POST(request) {
   }
 }
 
-function buildPmccPrompt(formData) {
+function buildPmccPrompt(formData, marketDataText = '') {
   const tickers = formData.watchlist
     ? formData.watchlist.split('\n').map(t => t.trim().toUpperCase()).filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t))
     : []
@@ -89,6 +107,13 @@ For EACH ticker in the watchlist below, analyse its suitability for a PMCC and p
 ## Watchlist to Analyze
 
 ${tickers.map(t => `- ${t}`).join('\n')}
+
+${marketDataText ? `## Live Market Data (from Yahoo Finance)
+
+**IMPORTANT: Use the live data below for your analysis. These are real-time prices and options chain data. Do NOT estimate values that are provided here — use the actual numbers. For LEAPS pricing, if the exact expiration isn't shown, extrapolate from the closest available long-dated chain. If data for a ticker is marked unavailable, use your best estimates and note it.**
+
+${marketDataText}
+` : ''}
 
 ## Required Output
 
