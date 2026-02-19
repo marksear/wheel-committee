@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   TrendingUp, TrendingDown, DollarSign, ChevronRight, ChevronLeft,
   Check, Loader2, Target, BarChart2, ChevronDown, Activity,
   BarChart3, AlertTriangle, Eye, Calendar, BookOpen,
   Repeat, ArrowRight, ArrowDown, Star, Shield, Clock,
   PieChart, Wallet, RefreshCw, CheckCircle2, XCircle, AlertCircle,
-  Award, Zap, Brain, Layers, Bell, RotateCcw
+  Award, Zap, Brain, Layers, Bell, RotateCcw, Info, Gauge
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
 
@@ -40,27 +40,32 @@ function getPositionAlerts(position, livePrice) {
     alerts.push({ type: 'gamma', label: 'Gamma Risk', color: 'red', description: `Only ${position.dte} DTE remaining — gamma risk is elevated` });
   }
 
-  // Profit taking: if we can estimate current value vs premium received
+  // Profit taking and defensive roll using estimated option value
   if (livePrice != null && position.premium > 0) {
-    let intrinsicValue = 0;
+    // Estimate current option value
+    let estimatedValue;
     if (position.type === 'PUT') {
-      intrinsicValue = Math.max(0, position.strike - livePrice);
-    } else if (position.type === 'CALL') {
-      intrinsicValue = Math.max(0, livePrice - position.strike);
+      const intrinsic = Math.max(0, position.strike - livePrice);
+      const timeRatio = Math.max(0, position.dte / 45);
+      const initialTimeValue = Math.max(0, position.premium - Math.max(0, position.strike - livePrice));
+      estimatedValue = intrinsic + (initialTimeValue * Math.sqrt(timeRatio));
+    } else {
+      const intrinsic = Math.max(0, livePrice - position.strike);
+      const timeRatio = Math.max(0, position.dte / 45);
+      const initialTimeValue = Math.max(0, position.premium - Math.max(0, livePrice - position.strike));
+      estimatedValue = intrinsic + (initialTimeValue * Math.sqrt(timeRatio));
     }
-    // Rough estimate: if intrinsic is 0 and DTE is short, current option value is low
-    // If premium was $2.50 and the option is now worth ~$0 (far OTM), that's ~100% profit
-    // We approximate: if stock is well away from strike, profit is high
+    const profitPct = ((position.premium - estimatedValue) / position.premium) * 100;
+
+    if (profitPct >= 50) {
+      alerts.push({ type: 'profit', label: 'Take Profit', color: 'emerald', description: `Position at ~${profitPct.toFixed(0)}% of max profit — consider closing` });
+    }
+
+    // Defensive roll: stock approaching strike (within 2%)
     const moneyness = position.type === 'PUT'
       ? (position.strike - livePrice) / position.strike
       : (livePrice - position.strike) / position.strike;
 
-    if (moneyness < -0.05 && position.dte < 14) {
-      // Stock is >5% away from strike with <14 DTE — likely >50% profit
-      alerts.push({ type: 'profit', label: 'Take Profit', color: 'emerald', description: 'Position likely at >50% of max profit — consider closing' });
-    }
-
-    // Defensive roll: stock approaching strike (within 2%)
     if (Math.abs(moneyness) < 0.02) {
       const direction = position.type === 'PUT' ? 'out and down' : 'out and up';
       alerts.push({ type: 'roll', label: 'Defensive Roll', color: 'amber', description: `Stock near strike — consider rolling ${direction}` });
@@ -82,6 +87,9 @@ export default function WheelCommitteeApp() {
   const [managementData, setManagementData] = useState({}); // { ticker: { livePrice, loading, ... } }
   const [rollingPosition, setRollingPosition] = useState(null); // position currently being rolled
   const [rollResult, setRollResult] = useState(null);
+  const [ivRankData, setIvRankData] = useState({}); // { ticker: { ivRank, ivPercentile, currentIV, ... } }
+  const [ivRankLoading, setIvRankLoading] = useState(false);
+  const [ivTooltipTicker, setIvTooltipTicker] = useState(null); // which ticker's IV tooltip is showing
 
   const [formData, setFormData] = useState({
     // Account
@@ -244,6 +252,59 @@ export default function WheelCommitteeApp() {
     }
   };
 
+  // Fetch IV rank data when analysis completes
+  useEffect(() => {
+    if (analysisComplete && analysisResult) {
+      const tickers = formData.watchlist
+        .split('\n')
+        .map(t => t.trim().toUpperCase())
+        .filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t));
+      if (tickers.length > 0) {
+        setIvRankLoading(true);
+        fetch('/api/iv-rank', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tickers })
+        })
+          .then(r => r.json())
+          .then(data => { setIvRankData(data); setIvRankLoading(false); })
+          .catch(() => setIvRankLoading(false));
+      }
+    }
+  }, [analysisComplete]);
+
+  // IV Rank Badge component
+  const IVRankBadge = ({ ticker }) => {
+    const data = ivRankData[ticker];
+    if (!data || data.ivRank == null) {
+      if (ivRankLoading) return <span className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-400 rounded animate-pulse">IV...</span>;
+      return null;
+    }
+    const rank = data.ivRank;
+    const color = rank < 30 ? 'bg-emerald-100 text-emerald-700' : rank <= 60 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
+    const label = rank < 30 ? 'Cheap premiums' : rank <= 60 ? 'Average premiums' : 'Expensive premiums — good for selling';
+    return (
+      <span className="relative inline-flex items-center">
+        <button
+          onClick={(e) => { e.stopPropagation(); setIvTooltipTicker(ivTooltipTicker === ticker ? null : ticker); }}
+          className={`px-1.5 py-0.5 text-xs font-medium rounded ${color} flex items-center gap-0.5`}
+        >
+          IV {rank}
+          <Info className="w-2.5 h-2.5" />
+        </button>
+        {ivTooltipTicker === ticker && (
+          <div className="absolute z-10 bottom-full left-0 mb-1 w-48 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
+            <p className="font-medium mb-1">IV Rank: {rank}%</p>
+            {data.ivPercentile != null && <p>IV Percentile: {data.ivPercentile}%</p>}
+            {data.currentIV != null && <p>Current IV: {data.currentIV}%</p>}
+            {data.iv52wkHigh != null && <p>52wk Range: {data.iv52wkLow}% — {data.iv52wkHigh}%</p>}
+            <p className="mt-1 text-gray-300">{label}</p>
+          </div>
+        )}
+      </span>
+    );
+  };
+
   // Fetch live prices for open positions (for management tab)
   const fetchManagementData = async (positions) => {
     const tickers = [...new Set(positions.map(p => p.ticker))];
@@ -252,41 +313,30 @@ export default function WheelCommitteeApp() {
     setManagementData(newData);
 
     try {
-      const response = await fetch('/api/stock-quotes', {
+      const response = await fetch('/api/quotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tickers })
       });
-      // Fallback: just use the analyze endpoint to get quotes isn't available
-      // We'll parse from the analysis result or fetch individually
-    } catch {
-      // ignore
-    }
-
-    // Simple approach: fetch quotes via Yahoo Finance proxy
-    // Since we don't have a dedicated quotes endpoint, we'll use the data
-    // already available from analysis, or set prices from formData context
-    const updated = {};
-    for (const ticker of tickers) {
-      try {
-        const res = await fetch('/api/manage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            position: positions.find(p => p.ticker === ticker),
-            formData,
-            quotesOnly: true
-          })
-        });
-        // We won't actually call this for quotes — we'll get live prices
-        // from the analysis result trades if available
-        updated[ticker] = { loading: false, livePrice: null };
-      } catch {
-        updated[ticker] = { loading: false, livePrice: null };
+      if (response.ok) {
+        const quotes = await response.json();
+        const updated = {};
+        for (const ticker of tickers) {
+          updated[ticker] = {
+            loading: false,
+            livePrice: quotes[ticker]?.price ?? null,
+          };
+        }
+        setManagementData(updated);
+        return;
       }
+    } catch {
+      // fall through to fallback
     }
 
-    // Try to get prices from analysis results
+    // Fallback: try to get prices from analysis results
+    const updated = {};
+    tickers.forEach(t => { updated[t] = { loading: false, livePrice: null }; });
     if (analysisResult) {
       const allTrades = [
         ...(analysisResult.trades || []),
@@ -299,7 +349,6 @@ export default function WheelCommitteeApp() {
         }
       }
     }
-
     setManagementData(updated);
   };
 
@@ -907,6 +956,100 @@ JNJ"
                 </div>
               </div>
 
+              {/* Portfolio Delta Gauge */}
+              {(() => {
+                // Aggregate delta from all recommended trades + open positions
+                let totalDelta = 0;
+                let deltaPositions = 0;
+
+                // From analysis results
+                if (analysisResult) {
+                  (analysisResult.trades || []).forEach(t => {
+                    if (t.delta) {
+                      // Short puts have positive delta, covered calls negative
+                      const d = parseFloat(t.delta);
+                      if (!isNaN(d)) {
+                        totalDelta += t.tradeType?.includes('CALL') ? -Math.abs(d) : Math.abs(d);
+                        deltaPositions++;
+                      }
+                    }
+                  });
+                  (analysisResult.pmccTrades || []).forEach(t => {
+                    if (t.leapsDelta) {
+                      totalDelta += parseFloat(t.leapsDelta) || 0; // Long LEAPS = positive delta
+                      deltaPositions++;
+                    }
+                  });
+                  (analysisResult.spreadTrades || []).forEach(t => {
+                    if (t.shortDelta) {
+                      const d = parseFloat(t.shortDelta);
+                      if (!isNaN(d)) {
+                        if (t.strategy === 'Bull Put Spread') totalDelta += d;
+                        else if (t.strategy === 'Bear Call Spread') totalDelta -= d;
+                        // Iron condor: roughly delta-neutral
+                        deltaPositions++;
+                      }
+                    }
+                  });
+                }
+
+                // From open positions
+                const positions = parsePositions(formData.currentPositions);
+                positions.forEach(pos => {
+                  if (pos.type === 'PUT') totalDelta += 0.15; // approx short put delta
+                  else if (pos.type === 'CALL') totalDelta -= 0.15; // approx short call delta
+                  else if (pos.type === 'SHARES') totalDelta += 1.0; // 100 shares = 1.0 delta
+                  deltaPositions++;
+                });
+
+                if (deltaPositions === 0) return null;
+
+                const clampedDelta = Math.max(-1, Math.min(1, totalDelta));
+                const gaugePercent = ((clampedDelta + 1) / 2) * 100; // 0% = -1.0, 50% = 0, 100% = +1.0
+                const isWarning = Math.abs(totalDelta) > 0.30;
+                const biasLabel = totalDelta > 0.05 ? 'Bullish' : totalDelta < -0.05 ? 'Bearish' : 'Neutral';
+
+                return (
+                  <div className={`rounded-2xl p-4 border ${isWarning ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Gauge className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm font-medium text-gray-700">Portfolio Delta</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-bold ${
+                          totalDelta > 0.05 ? 'text-emerald-600' : totalDelta < -0.05 ? 'text-red-600' : 'text-gray-600'
+                        }`}>
+                          {totalDelta >= 0 ? '+' : ''}{totalDelta.toFixed(2)} ({biasLabel})
+                        </span>
+                        {isWarning && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> Concentration Risk
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Gauge bar */}
+                    <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="absolute inset-0 flex">
+                        <div className="w-1/2 bg-gradient-to-r from-red-300 to-gray-200" />
+                        <div className="w-1/2 bg-gradient-to-r from-gray-200 to-emerald-300" />
+                      </div>
+                      {/* Needle */}
+                      <div
+                        className="absolute top-0 h-3 w-1 bg-gray-900 rounded-full transition-all"
+                        style={{ left: `calc(${gaugePercent}% - 2px)` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>Bearish -1.0</span>
+                      <span>Neutral</span>
+                      <span>Bullish +1.0</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Results Tab Bar */}
               {(() => {
                 const positions = parsePositions(formData.currentPositions);
@@ -1068,6 +1211,62 @@ JNJ"
                               </div>
                             </div>
 
+                            {/* Profit Target Tracker */}
+                            {pos.type !== 'SHARES' && livePrice != null && pos.premium > 0 && (() => {
+                              // Estimate % of max profit achieved
+                              // For short options: max profit = premium received
+                              // Current option value approximation based on moneyness + time
+                              const maxProfit = pos.premium; // per share
+                              let estimatedOptionValue;
+                              if (pos.type === 'PUT') {
+                                const intrinsic = Math.max(0, pos.strike - livePrice);
+                                // Time value decays roughly linearly; approximate remaining time value
+                                const timeRatio = Math.max(0, pos.dte / 45);
+                                const initialTimeValue = Math.max(0, pos.premium - Math.max(0, pos.strike - livePrice));
+                                estimatedOptionValue = intrinsic + (initialTimeValue * Math.sqrt(timeRatio));
+                              } else {
+                                const intrinsic = Math.max(0, livePrice - pos.strike);
+                                const timeRatio = Math.max(0, pos.dte / 45);
+                                const initialTimeValue = Math.max(0, pos.premium - Math.max(0, livePrice - pos.strike));
+                                estimatedOptionValue = intrinsic + (initialTimeValue * Math.sqrt(timeRatio));
+                              }
+                              const profitPerShare = Math.max(0, maxProfit - estimatedOptionValue);
+                              const profitPct = Math.min(100, Math.max(-100, (profitPerShare / maxProfit) * 100));
+                              const isProfit = profitPct > 0;
+                              const atTarget = profitPct >= 50;
+
+                              return (
+                                <div className="mb-3">
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-gray-500 flex items-center gap-1">
+                                      <Target className="w-3 h-3" /> Profit Target
+                                    </span>
+                                    <span className={`font-medium ${atTarget ? 'text-emerald-600' : isProfit ? 'text-teal-600' : 'text-red-600'}`}>
+                                      {profitPct.toFixed(0)}% of max profit {atTarget && '— Take Profit'}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-3 relative overflow-hidden">
+                                    {/* 50% target marker */}
+                                    <div className="absolute top-0 h-3 w-px bg-gray-400 z-10" style={{ left: '50%' }} />
+                                    <div
+                                      className={`h-3 rounded-full transition-all ${
+                                        atTarget ? 'bg-emerald-500' :
+                                        profitPct > 25 ? 'bg-teal-400' :
+                                        profitPct > 0 ? 'bg-amber-400' :
+                                        'bg-red-400'
+                                      }`}
+                                      style={{ width: `${Math.max(2, Math.abs(profitPct))}%` }}
+                                    />
+                                  </div>
+                                  <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+                                    <span>0%</span>
+                                    <span>50% target</span>
+                                    <span>100%</span>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
                             {/* Alert descriptions */}
                             {alerts.length > 0 && (
                               <div className="space-y-2 mb-3">
@@ -1225,7 +1424,9 @@ JNJ"
                             }`}
                             onClick={() => setExpandedTrade(expandedTrade === trade.ticker ? null : trade.ticker)}
                           >
-                            <td className="px-4 py-3 font-bold text-gray-900">{trade.ticker}</td>
+                            <td className="px-4 py-3 font-bold text-gray-900">
+                              <span className="flex items-center gap-2">{trade.ticker} <IVRankBadge ticker={trade.ticker} /></span>
+                            </td>
                             <td className="px-4 py-3 text-gray-700">{trade.leapsStrike != null ? `$${trade.leapsStrike}` : '—'}</td>
                             <td className="px-4 py-3 text-gray-700">{trade.leapsDTE ?? '—'}</td>
                             <td className="px-4 py-3 text-gray-700">{trade.leapsDelta ?? '—'}</td>
@@ -1379,7 +1580,7 @@ JNJ"
                                   }`} />
                                 </div>
                                 <div className="text-left">
-                                  <p className="font-bold text-gray-900">{trade.strategy}</p>
+                                  <p className="font-bold text-gray-900 flex items-center gap-2">{trade.strategy} <IVRankBadge ticker={trade.ticker} /></p>
                                   <p className="text-sm text-gray-500">
                                     {trade.strategy === 'Iron Condor'
                                       ? `${trade.shortStrike}/${trade.longStrike} put · ${trade.shortCallStrike}/${trade.longCallStrike} call`
@@ -1638,6 +1839,7 @@ JNJ"
                             <div className="flex items-center gap-2">
                               <p className="font-bold text-gray-900">{trade.ticker}</p>
                               {trade.wheelScore && <StarRating rating={Math.round(trade.wheelScore / 2)} />}
+                              <IVRankBadge ticker={trade.ticker} />
                             </div>
                             <p className="text-sm text-gray-500">{trade.name || trade.recommendation || 'Analyzing...'}</p>
                           </div>
