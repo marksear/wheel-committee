@@ -5,9 +5,70 @@ import {
   BarChart3, AlertTriangle, Eye, Calendar, BookOpen,
   Repeat, ArrowRight, ArrowDown, Star, Shield, Clock,
   PieChart, Wallet, RefreshCw, CheckCircle2, XCircle, AlertCircle,
-  Award, Zap, Brain, Layers
+  Award, Zap, Brain, Layers, Bell, RotateCcw
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
+
+// Parse positions from the text input format: TYPE, TICKER, STRIKE, EXPIRY, PREMIUM, OPENED
+function parsePositions(positionsText) {
+  if (!positionsText || !positionsText.trim()) return [];
+  return positionsText.split('\n').map(line => {
+    const parts = line.split(',').map(p => p.trim());
+    if (parts.length < 4) return null;
+    const type = parts[0].toUpperCase();
+    if (!['PUT', 'CALL', 'SHARES'].includes(type)) return null;
+    const ticker = parts[1].toUpperCase();
+    const strike = parseFloat(parts[2]);
+    const expiry = parts[3];
+    const premium = parts[4] && parts[4] !== '-' ? parseFloat(parts[4]) : 0;
+    const opened = parts[5] || '';
+    // Calculate DTE
+    const expiryDate = new Date(expiry);
+    const now = new Date();
+    const dte = Math.max(0, Math.round((expiryDate - now) / (1000 * 60 * 60 * 24)));
+    return { type, ticker, strike, expiry, premium, opened, dte };
+  }).filter(Boolean);
+}
+
+// Determine alerts for a position given live market data
+function getPositionAlerts(position, livePrice) {
+  const alerts = [];
+  if (position.type === 'SHARES') return alerts;
+
+  // Gamma risk: DTE < 7
+  if (position.dte < 7) {
+    alerts.push({ type: 'gamma', label: 'Gamma Risk', color: 'red', description: `Only ${position.dte} DTE remaining — gamma risk is elevated` });
+  }
+
+  // Profit taking: if we can estimate current value vs premium received
+  if (livePrice != null && position.premium > 0) {
+    let intrinsicValue = 0;
+    if (position.type === 'PUT') {
+      intrinsicValue = Math.max(0, position.strike - livePrice);
+    } else if (position.type === 'CALL') {
+      intrinsicValue = Math.max(0, livePrice - position.strike);
+    }
+    // Rough estimate: if intrinsic is 0 and DTE is short, current option value is low
+    // If premium was $2.50 and the option is now worth ~$0 (far OTM), that's ~100% profit
+    // We approximate: if stock is well away from strike, profit is high
+    const moneyness = position.type === 'PUT'
+      ? (position.strike - livePrice) / position.strike
+      : (livePrice - position.strike) / position.strike;
+
+    if (moneyness < -0.05 && position.dte < 14) {
+      // Stock is >5% away from strike with <14 DTE — likely >50% profit
+      alerts.push({ type: 'profit', label: 'Take Profit', color: 'emerald', description: 'Position likely at >50% of max profit — consider closing' });
+    }
+
+    // Defensive roll: stock approaching strike (within 2%)
+    if (Math.abs(moneyness) < 0.02) {
+      const direction = position.type === 'PUT' ? 'out and down' : 'out and up';
+      alerts.push({ type: 'roll', label: 'Defensive Roll', color: 'amber', description: `Stock near strike — consider rolling ${direction}` });
+    }
+  }
+
+  return alerts;
+}
 
 export default function WheelCommitteeApp() {
   const [step, setStep] = useState(0);
@@ -17,6 +78,10 @@ export default function WheelCommitteeApp() {
   const [analysisError, setAnalysisError] = useState(null);
   const [expandedTrade, setExpandedTrade] = useState(null);
   const [activeTab, setActiveTab] = useState('new');
+  const [resultsTab, setResultsTab] = useState('analysis');
+  const [managementData, setManagementData] = useState({}); // { ticker: { livePrice, loading, ... } }
+  const [rollingPosition, setRollingPosition] = useState(null); // position currently being rolled
+  const [rollResult, setRollResult] = useState(null);
 
   const [formData, setFormData] = useState({
     // Account
@@ -176,6 +241,84 @@ export default function WheelCommitteeApp() {
       clearInterval(interval);
       setAnalysisError(error.message);
       setIsAnalyzing(false);
+    }
+  };
+
+  // Fetch live prices for open positions (for management tab)
+  const fetchManagementData = async (positions) => {
+    const tickers = [...new Set(positions.map(p => p.ticker))];
+    const newData = {};
+    tickers.forEach(t => { newData[t] = { loading: true }; });
+    setManagementData(newData);
+
+    try {
+      const response = await fetch('/api/stock-quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tickers })
+      });
+      // Fallback: just use the analyze endpoint to get quotes isn't available
+      // We'll parse from the analysis result or fetch individually
+    } catch {
+      // ignore
+    }
+
+    // Simple approach: fetch quotes via Yahoo Finance proxy
+    // Since we don't have a dedicated quotes endpoint, we'll use the data
+    // already available from analysis, or set prices from formData context
+    const updated = {};
+    for (const ticker of tickers) {
+      try {
+        const res = await fetch('/api/manage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            position: positions.find(p => p.ticker === ticker),
+            formData,
+            quotesOnly: true
+          })
+        });
+        // We won't actually call this for quotes — we'll get live prices
+        // from the analysis result trades if available
+        updated[ticker] = { loading: false, livePrice: null };
+      } catch {
+        updated[ticker] = { loading: false, livePrice: null };
+      }
+    }
+
+    // Try to get prices from analysis results
+    if (analysisResult) {
+      const allTrades = [
+        ...(analysisResult.trades || []),
+        ...(analysisResult.pmccTrades || []),
+        ...(analysisResult.spreadTrades || [])
+      ];
+      for (const trade of allTrades) {
+        if (trade.ticker && tickers.includes(trade.ticker) && trade.currentPrice) {
+          updated[trade.ticker] = { loading: false, livePrice: parseFloat(trade.currentPrice) };
+        }
+      }
+    }
+
+    setManagementData(updated);
+  };
+
+  const handleRoll = async (position) => {
+    setRollingPosition(position.ticker + '-' + position.type);
+    setRollResult(null);
+    try {
+      const response = await fetch('/api/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position, formData })
+      });
+      if (!response.ok) throw new Error('Roll analysis failed');
+      const result = await response.json();
+      setRollResult({ ticker: position.ticker, type: position.type, ...result });
+    } catch (error) {
+      setRollResult({ ticker: position.ticker, type: position.type, error: error.message });
+    } finally {
+      setRollingPosition(null);
     }
   };
 
@@ -763,6 +906,290 @@ JNJ"
                   </div>
                 </div>
               </div>
+
+              {/* Results Tab Bar */}
+              {(() => {
+                const positions = parsePositions(formData.currentPositions);
+                const hasPositions = positions.length > 0;
+                const alertCount = hasPositions ? positions.reduce((count, pos) => {
+                  const price = managementData[pos.ticker]?.livePrice;
+                  return count + getPositionAlerts(pos, price).length;
+                }, 0) : 0;
+                return (
+                  <div className="flex gap-2 bg-gray-100 rounded-xl p-1">
+                    <button
+                      onClick={() => setResultsTab('analysis')}
+                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        resultsTab === 'analysis'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Analysis Results
+                    </button>
+                    <button
+                      onClick={() => {
+                        setResultsTab('manage');
+                        if (hasPositions) fetchManagementData(positions);
+                      }}
+                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                        resultsTab === 'manage'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Manage Trades
+                      {alertCount > 0 && (
+                        <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                          {alertCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Management Panel */}
+              {resultsTab === 'manage' && (() => {
+                const positions = parsePositions(formData.currentPositions);
+                if (positions.length === 0) {
+                  return (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
+                      <Bell className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="font-bold text-gray-900 mb-2">No Open Positions</h3>
+                      <p className="text-sm text-gray-500 mb-4">
+                        Enter your open positions in Step 2 (Positions) to enable trade management.
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Format: TYPE, TICKER, STRIKE, EXPIRY, PREMIUM, OPENED
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="font-bold text-gray-900">Open Positions ({positions.length})</h2>
+                      <button
+                        onClick={() => fetchManagementData(positions)}
+                        className="flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-700"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                      </button>
+                    </div>
+
+                    {positions.map((pos, idx) => {
+                      const livePrice = managementData[pos.ticker]?.livePrice;
+                      const alerts = getPositionAlerts(pos, livePrice);
+                      const isRolling = rollingPosition === pos.ticker + '-' + pos.type;
+                      const thisRollResult = rollResult && rollResult.ticker === pos.ticker && rollResult.type === pos.type ? rollResult : null;
+
+                      // Estimate P&L direction
+                      let plStatus = null;
+                      if (livePrice != null) {
+                        if (pos.type === 'PUT') {
+                          plStatus = livePrice > pos.strike ? 'profit' : livePrice < pos.strike ? 'loss' : 'breakeven';
+                        } else if (pos.type === 'CALL') {
+                          plStatus = livePrice < pos.strike ? 'profit' : livePrice > pos.strike ? 'loss' : 'breakeven';
+                        }
+                      }
+
+                      return (
+                        <div key={`${pos.ticker}-${pos.type}-${idx}`} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                          {/* Alert badges at top */}
+                          {alerts.length > 0 && (
+                            <div className="flex gap-2 p-3 bg-gray-50 border-b border-gray-100">
+                              {alerts.map((alert, ai) => (
+                                <span key={ai} className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${
+                                  alert.color === 'red' ? 'bg-red-100 text-red-700' :
+                                  alert.color === 'emerald' ? 'bg-emerald-100 text-emerald-700' :
+                                  'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {alert.type === 'gamma' && <AlertTriangle className="w-3 h-3" />}
+                                  {alert.type === 'profit' && <CheckCircle2 className="w-3 h-3" />}
+                                  {alert.type === 'roll' && <RotateCcw className="w-3 h-3" />}
+                                  {alert.label}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Position header */}
+                          <div className="p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                  pos.type === 'PUT' ? 'bg-blue-100' :
+                                  pos.type === 'CALL' ? 'bg-amber-100' :
+                                  'bg-purple-100'
+                                }`}>
+                                  <span className={`text-sm font-bold ${
+                                    pos.type === 'PUT' ? 'text-blue-600' :
+                                    pos.type === 'CALL' ? 'text-amber-600' :
+                                    'text-purple-600'
+                                  }`}>{pos.type.charAt(0)}</span>
+                                </div>
+                                <div>
+                                  <p className="font-bold text-gray-900">{pos.ticker} — {pos.type}</p>
+                                  <p className="text-sm text-gray-500">${pos.strike} strike · Exp {pos.expiry}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                {plStatus && (
+                                  <span className={`px-2 py-1 text-xs font-medium rounded ${
+                                    plStatus === 'profit' ? 'bg-emerald-100 text-emerald-700' :
+                                    plStatus === 'loss' ? 'bg-red-100 text-red-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {plStatus === 'profit' ? 'In Profit' : plStatus === 'loss' ? 'At Risk' : 'Near Strike'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Stats grid */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                              <div className="bg-gray-50 rounded-lg p-2.5">
+                                <p className="text-xs text-gray-500">DTE</p>
+                                <p className={`font-bold ${pos.dte < 7 ? 'text-red-600' : pos.dte < 14 ? 'text-amber-600' : 'text-gray-900'}`}>{pos.dte} days</p>
+                              </div>
+                              <div className="bg-gray-50 rounded-lg p-2.5">
+                                <p className="text-xs text-gray-500">Premium</p>
+                                <p className="font-bold text-emerald-600">${pos.premium}</p>
+                              </div>
+                              <div className="bg-gray-50 rounded-lg p-2.5">
+                                <p className="text-xs text-gray-500">Strike</p>
+                                <p className="font-bold text-gray-900">${pos.strike}</p>
+                              </div>
+                              <div className="bg-gray-50 rounded-lg p-2.5">
+                                <p className="text-xs text-gray-500">Live Price</p>
+                                <p className="font-bold text-gray-900">{livePrice != null ? `$${livePrice}` : '—'}</p>
+                              </div>
+                            </div>
+
+                            {/* Alert descriptions */}
+                            {alerts.length > 0 && (
+                              <div className="space-y-2 mb-3">
+                                {alerts.map((alert, ai) => (
+                                  <div key={ai} className={`p-2.5 rounded-lg border text-sm ${
+                                    alert.color === 'red' ? 'bg-red-50 border-red-200 text-red-700' :
+                                    alert.color === 'emerald' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                                    'bg-amber-50 border-amber-200 text-amber-700'
+                                  }`}>
+                                    {alert.description}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* DTE Progress bar */}
+                            {pos.type !== 'SHARES' && (
+                              <div className="mb-3">
+                                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                  <span>Time remaining</span>
+                                  <span>{pos.dte} DTE</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className={`h-2 rounded-full transition-all ${
+                                      pos.dte < 7 ? 'bg-red-500' :
+                                      pos.dte < 14 ? 'bg-amber-500' :
+                                      'bg-emerald-500'
+                                    }`}
+                                    style={{ width: `${Math.min(100, (pos.dte / 45) * 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Roll button */}
+                            {pos.type !== 'SHARES' && (
+                              <button
+                                onClick={() => handleRoll(pos)}
+                                disabled={isRolling}
+                                className="w-full mt-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-medium rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                              >
+                                {isRolling ? (
+                                  <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing Roll...</>
+                                ) : (
+                                  <><RotateCcw className="w-4 h-4" /> Get Roll Recommendation</>
+                                )}
+                              </button>
+                            )}
+
+                            {/* Roll result */}
+                            {thisRollResult && !thisRollResult.error && thisRollResult.rollRecommendation && (
+                              <div className="mt-3 p-4 bg-teal-50 border border-teal-200 rounded-xl">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <RotateCcw className="w-4 h-4 text-teal-600" />
+                                  <span className="font-bold text-teal-800">
+                                    Recommendation: {thisRollResult.rollRecommendation.action}
+                                  </span>
+                                </div>
+                                {thisRollResult.rollRecommendation.action === 'ROLL' && (
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+                                    {thisRollResult.rollRecommendation.closeCost != null && (
+                                      <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+                                        <p className="text-xs text-gray-500">Close Cost</p>
+                                        <p className="font-bold text-red-600">${thisRollResult.rollRecommendation.closeCost}</p>
+                                      </div>
+                                    )}
+                                    {thisRollResult.rollRecommendation.newStrike != null && (
+                                      <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+                                        <p className="text-xs text-gray-500">New Strike</p>
+                                        <p className="font-bold text-gray-900">${thisRollResult.rollRecommendation.newStrike}</p>
+                                      </div>
+                                    )}
+                                    {thisRollResult.rollRecommendation.newExpiry && (
+                                      <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+                                        <p className="text-xs text-gray-500">New Expiry</p>
+                                        <p className="font-bold text-gray-900">{thisRollResult.rollRecommendation.newExpiry}</p>
+                                      </div>
+                                    )}
+                                    {thisRollResult.rollRecommendation.newPremium != null && (
+                                      <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+                                        <p className="text-xs text-gray-500">New Premium</p>
+                                        <p className="font-bold text-emerald-600">${thisRollResult.rollRecommendation.newPremium}</p>
+                                      </div>
+                                    )}
+                                    {thisRollResult.rollRecommendation.netCredit != null && (
+                                      <div className={`rounded-lg p-2.5 border ${thisRollResult.rollRecommendation.netCredit >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                                        <p className="text-xs text-gray-500">Net Credit/Debit</p>
+                                        <p className={`font-bold ${thisRollResult.rollRecommendation.netCredit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                          {thisRollResult.rollRecommendation.netCredit >= 0 ? '+' : ''}${thisRollResult.rollRecommendation.netCredit}
+                                        </p>
+                                      </div>
+                                    )}
+                                    {thisRollResult.rollRecommendation.newDTE != null && (
+                                      <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+                                        <p className="text-xs text-gray-500">New DTE</p>
+                                        <p className="font-bold text-gray-900">{thisRollResult.rollRecommendation.newDTE} days</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                {thisRollResult.rollRecommendation.rationale && (
+                                  <p className="text-sm text-teal-700">{thisRollResult.rollRecommendation.rationale}</p>
+                                )}
+                              </div>
+                            )}
+
+                            {thisRollResult && thisRollResult.error && (
+                              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                                Roll analysis failed: {thisRollResult.error}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Analysis Results (only show when analysis tab is active) */}
+              {resultsTab === 'analysis' && <>
 
               {/* PMCC Results Table */}
               {formData.strategyMode === 'pmcc' && analysisResult.pmccTrades && analysisResult.pmccTrades.length > 0 && (
@@ -1694,6 +2121,8 @@ JNJ"
                   </pre>
                 </div>
               </div>
+
+              </>}
             </div>
           );
         }
