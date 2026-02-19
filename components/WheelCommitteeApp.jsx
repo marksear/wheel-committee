@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  TrendingUp, TrendingDown, DollarSign, ChevronRight, ChevronLeft, 
-  Check, Loader2, Target, BarChart2, ChevronDown, Activity, 
+import {
+  TrendingUp, TrendingDown, DollarSign, ChevronRight, ChevronLeft,
+  Check, Loader2, Target, BarChart2, ChevronDown, Activity,
   BarChart3, AlertTriangle, Eye, Calendar, BookOpen,
   Repeat, ArrowRight, ArrowDown, Star, Shield, Clock,
   PieChart, Wallet, RefreshCw, CheckCircle2, XCircle, AlertCircle,
-  Award, Zap, Brain
+  Award, Zap, Brain, Layers
 } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
 
 export default function WheelCommitteeApp() {
   const [step, setStep] = useState(0);
@@ -81,6 +82,26 @@ export default function WheelCommitteeApp() {
       return steps;
     }
 
+    if (formData.strategyMode === 'spreads') {
+      const steps = [
+        'Loading account data...',
+        'Checking buying power...',
+      ];
+      tickers.forEach(ticker => {
+        steps.push(`Fetching ${ticker} options chain...`);
+      });
+      steps.push(
+        'Screening Bull Put Spreads...',
+        'Screening Bear Call Spreads...',
+        'Building Iron Condors...',
+        'Calculating Probability of Profit...',
+        'Evaluating risk/reward ratios...',
+        'Computing P&L profiles...',
+        'Generating spread recommendations...'
+      );
+      return steps;
+    }
+
     const steps = [
       'Loading account data...',
       'Checking buying power...',
@@ -129,7 +150,7 @@ export default function WheelCommitteeApp() {
     }, stepInterval);
 
     try {
-      const apiEndpoint = formData.strategyMode === 'pmcc' ? '/api/pmcc' : '/api/analyze';
+      const apiEndpoint = formData.strategyMode === 'pmcc' ? '/api/pmcc' : formData.strategyMode === 'spreads' ? '/api/spreads' : '/api/analyze';
       const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -496,7 +517,7 @@ JNJ"
             {/* Strategy Mode Selector */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Strategy Mode</label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={() => setFormData({ ...formData, strategyMode: 'wheel' })}
                   className={`p-4 rounded-xl border-2 text-left transition-all ${
@@ -525,7 +546,22 @@ JNJ"
                     <span className="font-bold text-gray-900">PMCC</span>
                   </div>
                   <p className="text-sm text-gray-600">Poor Man's Covered Call via LEAPS</p>
-                  <p className="text-xs text-gray-400 mt-1">~70-80% less capital than owning shares</p>
+                  <p className="text-xs text-gray-400 mt-1">~70-80% less capital</p>
+                </button>
+                <button
+                  onClick={() => setFormData({ ...formData, strategyMode: 'spreads' })}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    formData.strategyMode === 'spreads'
+                      ? 'border-violet-500 bg-violet-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Layers className={`w-5 h-5 ${formData.strategyMode === 'spreads' ? 'text-violet-600' : 'text-gray-400'}`} />
+                    <span className="font-bold text-gray-900">Spreads</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Verticals & Iron Condors</p>
+                  <p className="text-xs text-gray-400 mt-1">Risk-defined income</p>
                 </button>
               </div>
             </div>
@@ -534,6 +570,14 @@ JNJ"
               <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
                 <p className="text-sm text-teal-800">
                   <strong>PMCC Mode:</strong> We'll identify LEAPS calls (Delta ≥0.80, &gt;365 DTE) and pair them with short-term calls to generate income — using ~70-80% less capital than owning 100 shares.
+                </p>
+              </div>
+            )}
+
+            {formData.strategyMode === 'spreads' && (
+              <div className="bg-violet-50 border border-violet-200 rounded-lg p-4">
+                <p className="text-sm text-violet-800">
+                  <strong>Spreads Mode:</strong> We'll analyse Bull Put Spreads, Bear Call Spreads, and Iron Condors for each ticker — risk-defined strategies with known max profit and max loss.
                 </p>
               </div>
             )}
@@ -616,10 +660,12 @@ JNJ"
               </div>
             </div>
 
-            <div className={`${formData.strategyMode === 'pmcc' ? 'bg-teal-50 border-teal-200' : 'bg-emerald-50 border-emerald-200'} border rounded-lg p-4`}>
-              <p className={`text-sm ${formData.strategyMode === 'pmcc' ? 'text-teal-800' : 'text-emerald-800'}`}>
+            <div className={`${formData.strategyMode === 'pmcc' ? 'bg-teal-50 border-teal-200' : formData.strategyMode === 'spreads' ? 'bg-violet-50 border-violet-200' : 'bg-emerald-50 border-emerald-200'} border rounded-lg p-4`}>
+              <p className={`text-sm ${formData.strategyMode === 'pmcc' ? 'text-teal-800' : formData.strategyMode === 'spreads' ? 'text-violet-800' : 'text-emerald-800'}`}>
                 {formData.strategyMode === 'pmcc' ? (
                   <><strong>PMCC Summary:</strong> Scanning watchlist for LEAPS candidates (Delta ≥0.80, &gt;365 DTE) with profitable short call pairings. Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month income with reduced capital.</>
+                ) : formData.strategyMode === 'spreads' ? (
+                  <><strong>Spreads Summary:</strong> Scanning for Bull Put Spreads, Bear Call Spreads, and Iron Condors at ~{parseFloat(formData.targetDelta) * 100}% delta, {formData.targetDte} DTE. Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month in premium with defined risk.</>
                 ) : (
                   <><strong>Settings Summary:</strong> Targeting ~{parseFloat(formData.targetDelta) * 100}% delta puts, {formData.targetDte} DTE, on stocks scoring {formData.minWheelScore}+. Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month in premium.</>
                 )}
@@ -638,7 +684,7 @@ JNJ"
                 <RefreshCw className="absolute inset-0 m-auto w-8 h-8 text-emerald-600" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900">
-                {formData.strategyMode === 'pmcc' ? 'PMCC Scanner Running' : 'Wheel Committee in Session'}
+                {formData.strategyMode === 'pmcc' ? 'PMCC Scanner Running' : formData.strategyMode === 'spreads' ? 'Spreads Scanner Running' : 'Wheel Committee in Session'}
               </h2>
 
               <div className="max-w-md mx-auto text-left bg-gray-50 rounded-xl p-4">
@@ -693,7 +739,7 @@ JNJ"
                     <p className="text-emerald-200 text-sm">Wheel Committee Report</p>
                     <h1 className="text-2xl font-bold mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h1>
                     <p className="text-emerald-300 mt-2">
-                      {formData.strategyMode === 'pmcc' ? 'PMCC Mode' : (analysisResult.mode || (formData.mode === 'cash_secured' ? 'Cash-Secured Mode' : 'Margin Mode'))} • {formData.watchlist.split('\n').filter(t => t.trim()).length} stocks analyzed
+                      {formData.strategyMode === 'pmcc' ? 'PMCC Mode' : formData.strategyMode === 'spreads' ? 'Spreads Mode' : (analysisResult.mode || (formData.mode === 'cash_secured' ? 'Cash-Secured Mode' : 'Margin Mode'))} • {formData.watchlist.split('\n').filter(t => t.trim()).length} stocks analyzed
                     </p>
                   </div>
                 </div>
@@ -870,8 +916,272 @@ JNJ"
                 </div>
               )}
 
+              {/* Spreads Results */}
+              {formData.strategyMode === 'spreads' && analysisResult.spreadTrades && analysisResult.spreadTrades.length > 0 && (
+                <div className="space-y-4">
+                  {/* Group trades by ticker */}
+                  {(() => {
+                    const byTicker = {};
+                    analysisResult.spreadTrades.forEach(trade => {
+                      if (!byTicker[trade.ticker]) byTicker[trade.ticker] = [];
+                      byTicker[trade.ticker].push(trade);
+                    });
+                    return Object.entries(byTicker).map(([ticker, trades]) => (
+                      <div key={ticker} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="p-4 border-b border-gray-100">
+                          <h2 className="font-bold text-gray-900">{ticker} — Spread Strategies</h2>
+                          <p className="text-sm text-gray-500 mt-1">{trades.length} strategies analyzed</p>
+                        </div>
+
+                        {trades.map((trade, idx) => (
+                          <div key={`${trade.ticker}-${trade.strategy}-${idx}`} className="border-b border-gray-100 last:border-b-0">
+                            <button
+                              onClick={() => setExpandedTrade(expandedTrade === `${trade.ticker}-${trade.strategy}` ? null : `${trade.ticker}-${trade.strategy}`)}
+                              className="w-full p-4 flex items-center justify-between hover:bg-gray-50"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                                  trade.strategy === 'Iron Condor' ? 'bg-purple-100' :
+                                  trade.strategy === 'Bull Put Spread' ? 'bg-emerald-100' :
+                                  'bg-rose-100'
+                                }`}>
+                                  <Layers className={`w-6 h-6 ${
+                                    trade.strategy === 'Iron Condor' ? 'text-purple-600' :
+                                    trade.strategy === 'Bull Put Spread' ? 'text-emerald-600' :
+                                    'text-rose-600'
+                                  }`} />
+                                </div>
+                                <div className="text-left">
+                                  <p className="font-bold text-gray-900">{trade.strategy}</p>
+                                  <p className="text-sm text-gray-500">
+                                    {trade.strategy === 'Iron Condor'
+                                      ? `${trade.shortStrike}/${trade.longStrike} put · ${trade.shortCallStrike}/${trade.longCallStrike} call`
+                                      : `${trade.shortStrike}/${trade.longStrike} · $${trade.spreadWidth} wide`}
+                                    {trade.dte ? ` · ${trade.dte} DTE` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  {trade.verdict && (
+                                    <span className={`px-2 py-1 text-xs font-medium rounded ${
+                                      trade.verdict === 'SELL' ? 'bg-green-100 text-green-700' :
+                                      trade.verdict === 'WAIT' ? 'bg-amber-100 text-amber-700' :
+                                      'bg-red-100 text-red-700'
+                                    }`}>{trade.verdict}</span>
+                                  )}
+                                  {trade.premium != null && (
+                                    <p className="text-sm mt-1 font-medium text-emerald-600">${trade.premium} credit</p>
+                                  )}
+                                </div>
+                                <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedTrade === `${trade.ticker}-${trade.strategy}` ? 'rotate-180' : ''}`} />
+                              </div>
+                            </button>
+
+                            {expandedTrade === `${trade.ticker}-${trade.strategy}` && (
+                              <div className="px-4 pb-4 bg-violet-50 border-t border-violet-200">
+                                {/* Stats Grid */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 py-4">
+                                  {trade.maxProfit != null && (
+                                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                      <p className="text-xs text-gray-500">Max Profit</p>
+                                      <p className="font-bold text-emerald-600">${trade.maxProfit}</p>
+                                    </div>
+                                  )}
+                                  {trade.maxLoss != null && (
+                                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                      <p className="text-xs text-gray-500">Max Loss</p>
+                                      <p className="font-bold text-red-600">-${trade.maxLoss}</p>
+                                    </div>
+                                  )}
+                                  {trade.probabilityOfProfit != null && (
+                                    <div className={`rounded-lg p-3 border ${trade.probabilityOfProfit >= 70 ? 'bg-emerald-50 border-emerald-200' : trade.probabilityOfProfit >= 60 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+                                      <p className="text-xs text-gray-500">Prob. of Profit</p>
+                                      <p className={`font-bold ${trade.probabilityOfProfit >= 70 ? 'text-emerald-600' : trade.probabilityOfProfit >= 60 ? 'text-amber-600' : 'text-red-600'}`}>{trade.probabilityOfProfit}%</p>
+                                    </div>
+                                  )}
+                                  {trade.returnOnRisk != null && (
+                                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                      <p className="text-xs text-gray-500">Return on Risk</p>
+                                      <p className="font-bold text-violet-600">{trade.returnOnRisk.toFixed(1)}%</p>
+                                    </div>
+                                  )}
+                                  {trade.buyingPowerRequired != null && (
+                                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                      <p className="text-xs text-gray-500">Buying Power Req.</p>
+                                      <p className="font-bold text-gray-900">${trade.buyingPowerRequired}</p>
+                                    </div>
+                                  )}
+                                  {trade.breakeven != null && (
+                                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                      <p className="text-xs text-gray-500">{trade.strategy === 'Iron Condor' ? 'Lower Breakeven' : 'Breakeven'}</p>
+                                      <p className="font-bold text-gray-900">${trade.breakeven}</p>
+                                    </div>
+                                  )}
+                                  {trade.upperBreakeven != null && (
+                                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                      <p className="text-xs text-gray-500">Upper Breakeven</p>
+                                      <p className="font-bold text-gray-900">${trade.upperBreakeven}</p>
+                                    </div>
+                                  )}
+                                  {trade.dte != null && (
+                                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                      <p className="text-xs text-gray-500">Days to Expiry</p>
+                                      <p className="font-bold text-gray-900">{trade.dte} DTE</p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* P&L Diagram */}
+                                {trade.maxProfit != null && trade.maxLoss != null && (
+                                  <div className="bg-white rounded-lg p-4 border border-gray-200 mb-3">
+                                    <p className="text-xs font-medium text-gray-700 mb-3">P&L at Expiration</p>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                      <AreaChart
+                                        data={(() => {
+                                          // Build P&L curve data points
+                                          const points = [];
+                                          if (trade.strategy === 'Iron Condor') {
+                                            const lp = trade.longStrike;
+                                            const sp = trade.shortStrike;
+                                            const sc = trade.shortCallStrike;
+                                            const lc = trade.longCallStrike;
+                                            const mp = trade.maxProfit;
+                                            const ml = trade.maxLoss;
+                                            const pad = (lc - lp) * 0.3;
+                                            points.push({ price: lp - pad, pl: -ml });
+                                            points.push({ price: lp, pl: -ml });
+                                            points.push({ price: sp, pl: mp });
+                                            points.push({ price: sc, pl: mp });
+                                            points.push({ price: lc, pl: -ml });
+                                            points.push({ price: lc + pad, pl: -ml });
+                                          } else if (trade.strategy === 'Bull Put Spread') {
+                                            const lp = trade.longStrike;
+                                            const sp = trade.shortStrike;
+                                            const mp = trade.maxProfit;
+                                            const ml = trade.maxLoss;
+                                            const pad = (sp - lp) * 2;
+                                            points.push({ price: lp - pad, pl: -ml });
+                                            points.push({ price: lp, pl: -ml });
+                                            points.push({ price: sp, pl: mp });
+                                            points.push({ price: sp + pad, pl: mp });
+                                          } else if (trade.strategy === 'Bear Call Spread') {
+                                            const sc = trade.shortStrike;
+                                            const lc = trade.longStrike;
+                                            const mp = trade.maxProfit;
+                                            const ml = trade.maxLoss;
+                                            const pad = (lc - sc) * 2;
+                                            points.push({ price: sc - pad, pl: mp });
+                                            points.push({ price: sc, pl: mp });
+                                            points.push({ price: lc, pl: -ml });
+                                            points.push({ price: lc + pad, pl: -ml });
+                                          }
+                                          return points;
+                                        })()}
+                                        margin={{ top: 10, right: 20, bottom: 5, left: 10 }}
+                                      >
+                                        <defs>
+                                          <linearGradient id={`plGrad-${trade.ticker}-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                                            <stop offset="50%" stopColor="#10b981" stopOpacity={0.05} />
+                                            <stop offset="100%" stopColor="#ef4444" stopOpacity={0.3} />
+                                          </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                        <XAxis
+                                          dataKey="price"
+                                          tickFormatter={(v) => `$${v}`}
+                                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                                        />
+                                        <YAxis
+                                          tickFormatter={(v) => `$${v}`}
+                                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                                        />
+                                        <Tooltip
+                                          formatter={(value) => [`$${value}`, 'P&L']}
+                                          labelFormatter={(v) => `Price: $${v}`}
+                                          contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                                        />
+                                        <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
+                                        {trade.breakeven != null && (
+                                          <ReferenceLine x={trade.breakeven} stroke="#8b5cf6" strokeDasharray="5 5" label={{ value: `BE $${trade.breakeven}`, fill: '#8b5cf6', fontSize: 10, position: 'top' }} />
+                                        )}
+                                        {trade.upperBreakeven != null && (
+                                          <ReferenceLine x={trade.upperBreakeven} stroke="#8b5cf6" strokeDasharray="5 5" label={{ value: `BE $${trade.upperBreakeven}`, fill: '#8b5cf6', fontSize: 10, position: 'top' }} />
+                                        )}
+                                        <Area
+                                          type="linear"
+                                          dataKey="pl"
+                                          stroke="#6d28d9"
+                                          strokeWidth={2}
+                                          fill={`url(#plGrad-${trade.ticker}-${idx})`}
+                                        />
+                                      </AreaChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                )}
+
+                                {/* Rationale */}
+                                {trade.rationale && (
+                                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                    <p className="text-xs font-medium text-amber-800 mb-1">Rationale</p>
+                                    <p className="text-sm text-amber-700">{trade.rationale}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ));
+                  })()}
+                </div>
+              )}
+
+              {/* Spreads Summary */}
+              {formData.strategyMode === 'spreads' && analysisResult.spreadsSummary && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-100">
+                    <h2 className="font-bold text-gray-900">Spreads Summary</h2>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
+                    {analysisResult.spreadsSummary.totalStrategies != null && (
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-2xl font-bold text-gray-900">{analysisResult.spreadsSummary.totalStrategies}</p>
+                        <p className="text-xs text-gray-500">Strategies Analyzed</p>
+                      </div>
+                    )}
+                    {analysisResult.spreadsSummary.avgProbabilityOfProfit != null && (
+                      <div className="text-center p-3 bg-violet-50 rounded-lg">
+                        <p className="text-2xl font-bold text-violet-600">{analysisResult.spreadsSummary.avgProbabilityOfProfit}%</p>
+                        <p className="text-xs text-gray-500">Avg Prob. of Profit</p>
+                      </div>
+                    )}
+                    {analysisResult.spreadsSummary.totalMaxProfit != null && (
+                      <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                        <p className="text-2xl font-bold text-emerald-600">${analysisResult.spreadsSummary.totalMaxProfit.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">Total Max Profit</p>
+                      </div>
+                    )}
+                    {analysisResult.spreadsSummary.totalBuyingPower != null && (
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-2xl font-bold text-gray-900">${analysisResult.spreadsSummary.totalBuyingPower.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">Total Buying Power</p>
+                      </div>
+                    )}
+                  </div>
+                  {analysisResult.spreadsSummary.bestStrategy && (
+                    <div className="px-4 pb-4">
+                      <span className="px-3 py-1 text-sm font-medium rounded-full bg-violet-100 text-violet-700">
+                        Best: {analysisResult.spreadsSummary.bestStrategy}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Trade Recommendations from API (Wheel mode) */}
-              {formData.strategyMode !== 'pmcc' && analysisResult.trades && analysisResult.trades.length > 0 && (
+              {formData.strategyMode !== 'pmcc' && formData.strategyMode !== 'spreads' && analysisResult.trades && analysisResult.trades.length > 0 && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="p-4 border-b border-gray-100">
                     <h2 className="font-bold text-gray-900">Wheel Score™ Analysis</h2>
@@ -1392,22 +1702,30 @@ JNJ"
           <div className="text-center py-12 space-y-6">
             {formData.strategyMode === 'pmcc' ? (
               <TrendingUp className="w-16 h-16 text-teal-500 mx-auto" />
+            ) : formData.strategyMode === 'spreads' ? (
+              <Layers className="w-16 h-16 text-violet-500 mx-auto" />
             ) : (
               <RefreshCw className="w-16 h-16 text-emerald-500 mx-auto" />
             )}
             <h2 className="text-2xl font-bold text-gray-900">
-              {formData.strategyMode === 'pmcc' ? 'Ready to Scan for PMCC' : 'Ready to Analyze'}
+              {formData.strategyMode === 'pmcc' ? 'Ready to Scan for PMCC' : formData.strategyMode === 'spreads' ? 'Ready to Scan Spreads' : 'Ready to Analyze'}
             </h2>
             <p className="text-gray-600 max-w-md mx-auto">
               {formData.strategyMode === 'pmcc'
                 ? 'We\'ll identify LEAPS candidates and pair them with short calls for capital-efficient income.'
+                : formData.strategyMode === 'spreads'
+                ? 'We\'ll analyse Bull Put Spreads, Bear Call Spreads, and Iron Condors with P&L profiles.'
                 : 'The Wheel Committee will calculate Wheel Scores™ and find the best premium opportunities.'}
             </p>
             <button
               onClick={runAnalysis}
-              className="px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors shadow-lg"
+              className={`px-8 py-4 text-white font-medium rounded-xl transition-colors shadow-lg ${
+                formData.strategyMode === 'spreads'
+                  ? 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600'
+                  : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
+              }`}
             >
-              {formData.strategyMode === 'pmcc' ? 'Find PMCC Opportunities' : 'Find Wheel Opportunities'}
+              {formData.strategyMode === 'pmcc' ? 'Find PMCC Opportunities' : formData.strategyMode === 'spreads' ? 'Find Spread Opportunities' : 'Find Wheel Opportunities'}
             </button>
           </div>
         );
