@@ -39,7 +39,7 @@ export default function WheelCommitteeApp() {
     // Session
     sessionType: 'new_trades',
     targetDelta: '0.18',
-    targetDte: '35',
+    targetDte: '2',
     marketOutlook: 'neutral',
   });
 
@@ -690,9 +690,13 @@ JNJ"
                                 'bg-red-100 text-red-700'
                               }`}>{trade.verdict}</span>
                             )}
-                            {trade.premium && (
+                            {trade.dailyReturn ? (
+                              <p className={`text-sm mt-1 font-medium ${trade.dailyReturn >= 0.30 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                {trade.dailyReturn.toFixed(2)}%/day
+                              </p>
+                            ) : trade.premium ? (
                               <p className="text-sm text-gray-500 mt-1">${trade.premium} premium</p>
-                            )}
+                            ) : null}
                           </div>
                           <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedTrade === trade.ticker ? 'rotate-180' : ''}`} />
                         </div>
@@ -701,14 +705,24 @@ JNJ"
                       {/* Expanded Trade Details */}
                       {expandedTrade === trade.ticker && (
                         <div className="px-4 pb-4 bg-gray-50 border-t border-gray-100">
-                          {/* Trade Type Badge */}
-                          {trade.tradeType && (
-                            <div className="py-2">
+                          {/* Trade Type & Expiry Frequency Badges */}
+                          <div className="py-2 flex flex-wrap gap-2">
+                            {trade.tradeType && (
                               <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
                                 {trade.tradeType}
                               </span>
-                            </div>
-                          )}
+                            )}
+                            {trade.expiryFrequency && (
+                              <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                                {trade.expiryFrequency}
+                              </span>
+                            )}
+                            {trade.dte != null && trade.dte <= 7 && (
+                              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                                Short-Dated
+                              </span>
+                            )}
+                          </div>
 
                           {/* Quick Stats Grid */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 py-4">
@@ -766,6 +780,20 @@ JNJ"
                                 <p className="font-bold text-gray-900">${trade.breakeven}</p>
                               </div>
                             )}
+                            {trade.dailyReturn && (
+                              <div className={`rounded-lg p-3 border ${trade.dailyReturn >= 0.30 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                                <p className="text-xs text-gray-500">Daily Return</p>
+                                <p className={`font-bold ${trade.dailyReturn >= 0.30 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                  {trade.dailyReturn.toFixed(2)}%/day {trade.dailyReturn >= 0.30 ? '✓' : '✗'}
+                                </p>
+                              </div>
+                            )}
+                            {trade.weeklyReturn && (
+                              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-500">Weekly Return</p>
+                                <p className="font-bold text-emerald-600">{trade.weeklyReturn}%</p>
+                              </div>
+                            )}
                             {trade.monthlyReturn && (
                               <div className="bg-white rounded-lg p-3 border border-gray-200">
                                 <p className="text-xs text-gray-500">Monthly Return</p>
@@ -816,6 +844,49 @@ JNJ"
                             <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                               <p className="text-xs font-medium text-amber-800 mb-1">Analysis</p>
                               <p className="text-sm text-amber-700">{trade.rationale}</p>
+                            </div>
+                          )}
+
+                          {/* Weekly Plan */}
+                          {trade.weeklyPlan && (
+                            <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                              <p className="text-xs font-medium text-purple-800 mb-2">Weekly Trading Plan</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                                <div>
+                                  <p className="text-purple-500 text-xs">Trades/Week</p>
+                                  <p className="font-bold text-purple-700">{trade.weeklyPlan.tradesPerWeek}x</p>
+                                </div>
+                                {trade.weeklyPlan.expiryDays && (
+                                  <div>
+                                    <p className="text-purple-500 text-xs">Expiry Days</p>
+                                    <p className="font-bold text-purple-700">{trade.weeklyPlan.expiryDays.join(', ')}</p>
+                                  </div>
+                                )}
+                                {trade.weeklyPlan.projectedWeeklyPremium && (
+                                  <div>
+                                    <p className="text-purple-500 text-xs">Weekly Premium</p>
+                                    <p className="font-bold text-purple-700">${trade.weeklyPlan.projectedWeeklyPremium}</p>
+                                  </div>
+                                )}
+                                {trade.weeklyPlan.projectedMonthlyPremium && (
+                                  <div>
+                                    <p className="text-purple-500 text-xs">Monthly Premium</p>
+                                    <p className="font-bold text-purple-700">${trade.weeklyPlan.projectedMonthlyPremium}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Next Expiries */}
+                          {trade.nextExpiries && trade.nextExpiries.length > 0 && (
+                            <div className="mb-3 flex items-center gap-2 text-sm">
+                              <span className="text-gray-500">Next expiries:</span>
+                              {trade.nextExpiries.map((exp, i) => (
+                                <span key={i} className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded">
+                                  {exp}
+                                </span>
+                              ))}
                             </div>
                           )}
 
@@ -900,13 +971,33 @@ JNJ"
                     {analysisResult.summaryData.totalTrades != null && (
                       <div className="text-center p-3 bg-gray-50 rounded-lg">
                         <p className="text-2xl font-bold text-gray-900">{analysisResult.summaryData.totalTrades}</p>
-                        <p className="text-xs text-gray-500">Total Trades</p>
+                        <p className="text-xs text-gray-500">Trades Today</p>
                       </div>
                     )}
-                    {analysisResult.summaryData.totalPremium != null && (
+                    {(analysisResult.summaryData.totalPremiumThisTrade || analysisResult.summaryData.totalPremium) != null && (
                       <div className="text-center p-3 bg-emerald-50 rounded-lg">
-                        <p className="text-2xl font-bold text-emerald-600">${analysisResult.summaryData.totalPremium}</p>
-                        <p className="text-xs text-gray-500">Total Premium</p>
+                        <p className="text-2xl font-bold text-emerald-600">${analysisResult.summaryData.totalPremiumThisTrade || analysisResult.summaryData.totalPremium}</p>
+                        <p className="text-xs text-gray-500">Premium This Trade</p>
+                      </div>
+                    )}
+                    {analysisResult.summaryData.projectedWeeklyPremium != null && (
+                      <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                        <p className="text-2xl font-bold text-emerald-600">${analysisResult.summaryData.projectedWeeklyPremium.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">Projected Weekly</p>
+                      </div>
+                    )}
+                    {analysisResult.summaryData.projectedMonthlyPremium != null && (
+                      <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                        <p className="text-2xl font-bold text-emerald-600">${analysisResult.summaryData.projectedMonthlyPremium.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">Projected Monthly</p>
+                      </div>
+                    )}
+                    {analysisResult.summaryData.avgDailyReturn != null && (
+                      <div className={`text-center p-3 rounded-lg ${analysisResult.summaryData.avgDailyReturn >= 0.30 ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                        <p className={`text-2xl font-bold ${analysisResult.summaryData.avgDailyReturn >= 0.30 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {analysisResult.summaryData.avgDailyReturn.toFixed(2)}%
+                        </p>
+                        <p className="text-xs text-gray-500">Avg Daily Return</p>
                       </div>
                     )}
                     {analysisResult.summaryData.totalCollateral != null && (
@@ -918,7 +1009,7 @@ JNJ"
                     {analysisResult.summaryData.portfolioYield != null && (
                       <div className="text-center p-3 bg-emerald-50 rounded-lg">
                         <p className="text-2xl font-bold text-emerald-600">{analysisResult.summaryData.portfolioYield}%</p>
-                        <p className="text-xs text-gray-500">Portfolio Yield</p>
+                        <p className="text-xs text-gray-500">Monthly Yield</p>
                       </div>
                     )}
                   </div>

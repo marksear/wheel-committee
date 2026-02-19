@@ -429,19 +429,54 @@ Before selling ANY put, answer this:
 
 ## 4.2 EXPIRY SELECTION (DTE)
 
+### High-Frequency Weekly Strategy (PREFERRED)
+
+Many large, liquid stocks (AAPL, MSFT, SPY, QQQ, AMZN, TSLA, NVDA, META, GOOGL, etc.) now have options expiring **Monday, Wednesday, and Friday** (3x per week). This creates a powerful opportunity to compound premium income by selling short-dated options with rapid theta decay.
+
+**Weekly Expiry Schedule for Liquid Stocks:**
+| Day | Expiry Available | Strategy |
+|-----|-----------------|----------|
+| **Monday** | Mon expiry (0-1 DTE) | Sell fresh puts/calls expiring Wed or Fri |
+| **Wednesday** | Wed expiry (0-2 DTE) | Sell fresh puts/calls expiring Fri or next Mon |
+| **Friday** | Fri expiry (0-2 DTE) | Sell fresh puts/calls expiring next Mon or Wed |
+
+**Key Advantage:** Instead of one 30-45 DTE trade per month, you can execute 8-12+ trades per month on the same underlying, compounding premium each time.
+
+### DTE Strategy Matrix
+
 | DTE | Pros | Cons | Best For |
 |-----|------|------|----------|
-| **7-14** | Fast decay, quick turnover | Low premium, high management | Active traders |
-| **21-30** | Good theta, manageable | Moderate premium | Monthly income |
-| **30-45** | **Optimal theta decay** | Longer wait | **Standard recommendation** |
-| **45-60** | Higher total premium | Slower decay, more risk time | Patient traders |
-| **>60** | Maximum premium | Too much time risk | Not recommended |
+| **0-2** | Maximum theta decay per day, rapid turnover, frequent compounding | Requires active management, gamma risk | **High-frequency wheel traders** |
+| **3-7** | Very fast decay, weekly income | Needs monitoring, smaller total premium per trade | **Weekly income traders** |
+| **7-14** | Fast decay, quick turnover | Moderate premium per trade | Active traders |
+| **21-30** | Good theta, manageable | Lower daily return | Monthly income |
+| **30-45** | Optimal theta decay curve | Slower compounding, capital tied up longer | Conservative/passive approach |
 
-**Default Recommendation: 30-45 DTE (optimal theta decay curve)**
+**Default Recommendation: 0-7 DTE on stocks with Mon/Wed/Fri expiries (AAPL, MSFT, etc.) for maximum daily return. Use 21-30 DTE for stocks with only monthly options.**
+
+### Why Short-Dated Works for the Wheel
+
+1. **Theta accelerates exponentially** in the last 0-7 days — you capture the steepest part of the decay curve
+2. **If assigned, you wanted the stock anyway** — that's the whole point of the Wheel
+3. **Rapid capital recycling** — collateral is freed every 2-3 days instead of every 30-45
+4. **Compounding effect** — 12 trades/month at 0.30% each = ~3.6%/month vs 1.5% from a single monthly trade
+5. **Smaller notional risk per trade** — less time for the stock to move against you
 
 ---
 
 ## 4.3 THE "SWEET SPOT" MATRIX
+
+### For High-Frequency Weekly Trades (0-7 DTE)
+
+| IV Rank | Recommended Delta | Recommended DTE | Daily Return Target |
+|---------|-------------------|-----------------|---------------------|
+| <20% | Wait or skip | — | — |
+| 20-35% | 0.15-0.20 | 2-5 DTE | ≥0.25%/day |
+| 35-50% | 0.12-0.18 | 1-3 DTE | ≥0.30%/day |
+| 50-70% | 0.10-0.15 | 1-2 DTE | ≥0.35%/day |
+| >70% | 0.08-0.12 (or skip) | 0-2 DTE | ≥0.40%/day |
+
+### For Monthly/Standard Trades (21-45 DTE)
 
 | IV Rank | Recommended Delta | Recommended DTE |
 |---------|-------------------|-----------------|
@@ -453,26 +488,57 @@ Before selling ANY put, answer this:
 
 **Note:** High IV Rank (>70%) may indicate event risk — check for earnings, FDA, etc.
 
+**ALWAYS prefer the high-frequency weekly approach for stocks with Mon/Wed/Fri expiries.** Only use the monthly approach for stocks that lack weekly options.
+
 ---
 
 ## 4.4 PREMIUM TARGETS
 
+### Primary Target: 0.30% Daily Return or Better
+
+The core return metric is **daily return on collateral at risk**. This is the key number that determines whether a trade is worth taking.
+
 | Metric | Minimum | Target | Excellent |
 |--------|---------|--------|-----------|
-| **Annualized Return** | >15% | 20-30% | >30% |
-| **Monthly Premium** | >1% of capital at risk | 1.5-2% | >2% |
-| **Premium per Day** | >$2/contract | $3-5/contract | >$5/contract |
+| **Daily Return** | ≥0.20%/day | **≥0.30%/day** | ≥0.40%/day |
+| **Weekly Return (3 trades)** | ≥0.60% | **≥0.90%** | ≥1.20% |
+| **Monthly Return (12+ trades)** | ≥2.4% | **≥3.6%** | ≥4.8% |
+| **Annualized Return** | ≥29% | **≥43%** | ≥58% |
 
-**Premium Calculation:**
-\`\`\`
-Monthly Return = (Premium / Strike Price) × 100
-Annualized Return = Monthly Return × 12 (approximate)
+### Daily Return Calculation
 
-Example:
-AAPL $180 Put, 30 DTE, $2.50 premium
-Monthly Return = ($2.50 / $180) × 100 = 1.39%
-Annualized = 1.39% × 12 = 16.7%
 \`\`\`
+Daily Return = (Premium / Strike Price) / DTE × 100
+
+MUST BE ≥ 0.30% per day to qualify as a trade.
+
+Example 1 — Weekly Trade (PREFERRED):
+AAPL $230 Put, 2 DTE, $1.50 premium
+Daily Return = ($1.50 / $230) / 2 × 100 = 0.33%/day ✅ TAKE THIS TRADE
+
+Example 2 — Weekly Trade:
+MSFT $415 Put, 3 DTE, $2.80 premium
+Daily Return = ($2.80 / $415) / 3 × 100 = 0.22%/day ❌ SKIP — below 0.30%
+
+Example 3 — Monthly Trade (for comparison):
+AAPL $230 Put, 30 DTE, $2.50 premium
+Daily Return = ($2.50 / $230) / 30 × 100 = 0.036%/day ❌ FAR BELOW target
+
+Example 4 — Compounding Effect:
+AAPL weeklies: 12 trades/month × 0.33%/day × 2 days avg = ~8% monthly
+vs AAPL monthly: 1 trade/month × 1.39% = 1.39% monthly
+\`\`\`
+
+**This is why high-frequency weekly trading on liquid names dominates monthly trades.**
+
+### Expiry Availability Check
+
+When analyzing each stock, ALWAYS check and report:
+- Does this stock have **Mon/Wed/Fri** expirations? (3x/week) → Use 0-3 DTE trades
+- Does this stock have **weekly Friday** expirations? → Use 3-7 DTE trades
+- **Monthly only?** → Use 21-30 DTE (flag as lower-priority)
+
+Stocks with 3x/week expirations should ALWAYS be prioritized for trade recommendations.
 
 ---
 
@@ -665,7 +731,18 @@ Confidence: [High / Medium / Low]
 
 ## 6.1 EARLY MANAGEMENT RULES
 
-### Take Profit Early
+### For High-Frequency Trades (0-7 DTE)
+
+| Profit % | Time Since Entry | Action |
+|----------|-----------------|--------|
+| 50%+ | <1 day | Close for profit, sell next expiry immediately |
+| 75%+ | Any | Close for profit, redeploy |
+| At expiry | OTM | Let expire worthless, sell next expiry |
+| At expiry | ITM | Accept assignment (you want the stock!) then sell covered calls |
+
+**High-frequency management is simple:** These trades are so short-dated that you mostly let them expire or close early if you hit 50%+ profit quickly. The key is **immediate redeployment** — as soon as one trade closes, open the next one.
+
+### For Monthly Trades (21-45 DTE)
 
 | Profit % | DTE Remaining | Action |
 |----------|---------------|--------|
@@ -683,14 +760,15 @@ Confidence: [High / Medium / Low]
 
 | Situation | Roll Action |
 |-----------|-------------|
-| Stock dropping, want to avoid assignment | Roll down and out (lower strike, later expiry) |
-| Stock rallying, want to keep shares | Roll up and out (higher strike, later expiry) |
-| Expiry approaching, still OTM | Roll out (same strike, later expiry) |
+| Stock dropping, want to avoid assignment | Roll down and out to next expiry (2-3 days out) |
+| Stock rallying, want to keep shares | Roll up and out to next expiry |
+| Expiry approaching, still OTM | Let expire, sell fresh for next expiry |
 
 **Rolling Rules:**
 - Only roll for a NET CREDIT (receive more than you pay)
+- For weeklies: roll to next Mon/Wed/Fri expiry — keep it tight
 - Don't roll more than 2-3 times on same position
-- If can't roll for credit, accept assignment/calling
+- If can't roll for credit, accept assignment/calling — **that's the Wheel working as designed**
 
 ---
 
@@ -1255,29 +1333,39 @@ Be specific, practical, and conservative. Always prioritize capital preservation
       "wheelScore": 8.3,
       "verdict": "SELL|WAIT|SKIP",
       "tradeType": "cash-secured put|covered call",
-      "currentPrice": 185.50,
-      "strike": 180.00,
-      "premium": 2.45,
-      "delta": 0.18,
-      "dte": 35,
-      "expirationDate": "Feb 21, 2025",
-      "ivRank": 45,
-      "monthlyReturn": 1.36,
-      "annualizedReturn": 16.3,
-      "collateralRequired": 18000,
-      "maxProfit": 245,
-      "breakeven": 177.55,
-      "assignmentComfort": "Yes - would own at $177.55 basis",
-      "earningsDate": "Jan 30, 2025",
+      "expiryFrequency": "3x/week (Mon/Wed/Fri)|weekly|monthly",
+      "currentPrice": 230.50,
+      "strike": 227.00,
+      "premium": 1.50,
+      "delta": 0.16,
+      "dte": 2,
+      "expirationDate": "Wed Feb 19, 2025",
+      "nextExpiries": ["Fri Feb 21", "Mon Feb 24", "Wed Feb 26"],
+      "ivRank": 42,
+      "dailyReturn": 0.33,
+      "weeklyReturn": 0.99,
+      "monthlyReturn": 3.96,
+      "annualizedReturn": 47.5,
+      "collateralRequired": 22700,
+      "maxProfit": 150,
+      "breakeven": 225.50,
+      "assignmentComfort": "Yes - would own at $225.50 basis",
+      "earningsDate": "Apr 24, 2025",
       "earningsRisk": "LOW|MEDIUM|HIGH",
-      "rationale": "Strong premium with comfortable assignment level. IV rank elevated post-earnings provides good entry.",
-      "risks": ["Earnings in 2 weeks", "Tech sector rotation risk"],
+      "rationale": "0.33%/day return exceeds 0.30% target. 3x/week expiries allow rapid compounding. Comfortable assignment at $225.50 basis.",
+      "risks": ["Gamma risk near expiry", "Gap risk overnight"],
       "scoreBreakdown": {
-        "ivRank": 2.0,
-        "premiumYield": 1.8,
+        "ivRank": 1.8,
+        "premiumYield": 2.0,
         "technicalSetup": 1.5,
         "fundamentals": 1.5,
         "assignmentComfort": 1.5
+      },
+      "weeklyPlan": {
+        "tradesPerWeek": 3,
+        "projectedWeeklyPremium": 450,
+        "projectedMonthlyPremium": 1800,
+        "expiryDays": ["Mon", "Wed", "Fri"]
       }
     }
   ],
@@ -1286,6 +1374,7 @@ Be specific, practical, and conservative. Always prioritize capital preservation
       "ticker": "TSLA",
       "name": "Tesla Inc.",
       "reason": "Earnings in 5 days - too risky",
+      "dailyReturn": 0.18,
       "revisitDate": "After Feb 5 earnings"
     }
   ],
@@ -1296,24 +1385,28 @@ Be specific, practical, and conservative. Always prioritize capital preservation
       "triggerCondition": "Wait for IV Rank above 40",
       "currentIV": 32,
       "targetIV": 40,
+      "expiryFrequency": "3x/week",
       "potentialStrike": 850,
-      "potentialPremium": 15.00
+      "potentialPremium": 15.00,
+      "potentialDailyReturn": 0.35
     }
   ],
   "summary": {
     "totalTrades": 3,
-    "totalPremium": 735,
+    "totalPremiumThisTrade": 450,
+    "projectedWeeklyPremium": 1350,
+    "projectedMonthlyPremium": 5400,
     "totalCollateral": 45000,
-    "estimatedMonthlyIncome": 735,
-    "portfolioYield": 1.6,
+    "avgDailyReturn": 0.33,
+    "portfolioYield": 3.6,
     "riskLevel": "LOW|MODERATE|HIGH"
   },
   "keyDates": [
     {
-      "date": "Jan 30, 2025",
-      "event": "AAPL Earnings",
-      "impact": "HIGH",
-      "action": "Close AAPL position before"
+      "date": "Feb 19, 2025",
+      "event": "AAPL Wed expiry",
+      "impact": "LOW",
+      "action": "Let expire or roll to Fri"
     }
   ]
 }
@@ -1352,13 +1445,17 @@ function convertJsonTrades(jsonData, watchlistTickers) {
     wheelScore: trade.wheelScore,
     verdict: trade.verdict,
     tradeType: trade.tradeType,
+    expiryFrequency: trade.expiryFrequency,
     currentPrice: trade.currentPrice,
     strike: trade.strike,
     premium: trade.premium,
     delta: trade.delta,
     dte: trade.dte,
     expirationDate: trade.expirationDate,
+    nextExpiries: trade.nextExpiries,
     ivRank: trade.ivRank,
+    dailyReturn: trade.dailyReturn,
+    weeklyReturn: trade.weeklyReturn,
     monthlyReturn: trade.monthlyReturn,
     annualizedReturn: trade.annualizedReturn,
     collateralRequired: trade.collateralRequired,
@@ -1370,6 +1467,7 @@ function convertJsonTrades(jsonData, watchlistTickers) {
     rationale: trade.rationale,
     risks: trade.risks,
     scoreBreakdown: trade.scoreBreakdown,
+    weeklyPlan: trade.weeklyPlan,
     details: null // No raw details when using JSON
   }))
 }
