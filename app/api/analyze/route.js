@@ -1,59 +1,112 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { fetchAllMarketData, formatMarketDataForPrompt } from '@/lib/yahooFinance'
 
+// Allow up to 5 minutes for the full analysis (market data + Claude generation)
+export const maxDuration = 300
+
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
 export async function POST(request) {
-  try {
-    const { formData } = await request.json()
+  const { formData } = await request.json()
 
-    // Extract tickers from watchlist
-    const tickers = formData.watchlist
-      ? formData.watchlist.split('\n').map(t => t.trim().toUpperCase()).filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t))
-      : []
+  const encoder = new TextEncoder()
 
-    // Fetch live market data for all tickers in parallel
-    let marketData = {}
-    let marketDataText = ''
-    if (tickers.length > 0) {
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+      }
+
       try {
-        marketData = await fetchAllMarketData(tickers)
-        marketDataText = formatMarketDataForPrompt(marketData)
-      } catch (err) {
-        console.error('Market data fetch failed, continuing without live data:', err.message)
-        marketDataText = '**Live market data unavailable.** Use your best estimates based on recent knowledge.\n'
+        // Extract tickers from watchlist
+        const tickers = formData.watchlist
+          ? formData.watchlist.split('\n').map(t => t.trim().toUpperCase()).filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t))
+          : []
+
+        send({ type: 'step', index: 0 }) // Scanning watchlist
+
+        // Fetch live market data for all tickers in parallel
+        let marketData = {}
+        let marketDataText = ''
+        if (tickers.length > 0) {
+          send({ type: 'step', index: 1 }) // Fetching live prices
+          try {
+            marketData = await fetchAllMarketData(tickers)
+            marketDataText = formatMarketDataForPrompt(marketData)
+          } catch (err) {
+            console.error('Market data fetch failed, continuing without live data:', err.message)
+            marketDataText = '**Live market data unavailable.** Use your best estimates based on recent knowledge.\n'
+          }
+        }
+
+        send({ type: 'step', index: 2 }) // Loading options chains
+
+        // Build the full Wheel Committee prompt with live data
+        const prompt = buildFullPrompt(formData, marketDataText)
+
+        send({ type: 'step', index: 3 }) // Screening IV Rank
+
+        // Stream Claude API response to keep connection alive
+        let responseText = ''
+        let tokenCount = 0
+
+        const claudeStream = client.messages.stream({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 16384,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+
+        // Step indices: 4=Selecting strikes, 5=Calculating premiums, 6=Running ACT, 7=Ranking, 8=Generating
+        const tokenSteps = [
+          { tokens: 500, index: 4 },   // Selecting optimal strikes
+          { tokens: 2000, index: 5 },   // Calculating premiums
+          { tokens: 4000, index: 6 },   // Running Assignment Comfort Test
+          { tokens: 7000, index: 7 },   // Ranking opportunities
+          { tokens: 10000, index: 8 },  // Generating recommendations
+        ]
+        let nextStepIdx = 0
+
+        for await (const event of claudeStream) {
+          if (event.type === 'content_block_delta' && event.delta?.text) {
+            responseText += event.delta.text
+            tokenCount += event.delta.text.length / 4 // rough token estimate
+
+            // Advance progress steps based on token count
+            while (nextStepIdx < tokenSteps.length && tokenCount >= tokenSteps[nextStepIdx].tokens) {
+              send({ type: 'step', index: tokenSteps[nextStepIdx].index })
+              nextStepIdx++
+            }
+          }
+        }
+
+        // Parse the response - pass formData for watchlist extraction
+        const result = parseResponse(responseText, formData)
+
+        send({ type: 'result', data: result })
+        controller.close()
+
+      } catch (error) {
+        console.error('Analysis error:', error)
+        send({ type: 'error', message: error.message || 'Analysis failed' })
+        controller.close()
       }
     }
+  })
 
-    // Build the full Wheel Committee prompt with live data
-    const prompt = buildFullPrompt(formData, marketDataText)
-
-    // Call Claude API with extended token limit for comprehensive analysis
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 16384,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    })
-
-    // Parse the response - pass formData for watchlist extraction
-    const responseText = message.content[0].text
-    const result = parseResponse(responseText, formData)
-
-    return Response.json(result)
-  } catch (error) {
-    console.error('Analysis error:', error)
-    return Response.json(
-      { error: 'Analysis failed', details: error.message },
-      { status: 500 }
-    )
-  }
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+    },
+  })
 }
 
 function buildFullPrompt(formData, marketDataText = '') {

@@ -210,45 +210,104 @@ export default function WheelCommitteeApp() {
     setCurrentAnalysisStep(0);
     setAnalysisError(null);
 
-    // Animate through steps while waiting for API
-    // Adjust timing based on number of steps (aim for ~15-20 seconds total animation)
-    const totalAnimationTime = 18000; // 18 seconds
-    const stepInterval = Math.max(400, Math.min(1000, totalAnimationTime / analysisSteps.length));
+    const apiEndpoint = formData.strategyMode === 'pmcc' ? '/api/pmcc' : formData.strategyMode === 'spreads' ? '/api/spreads' : '/api/analyze';
+    const useStreaming = formData.strategyMode !== 'pmcc' && formData.strategyMode !== 'spreads';
 
-    const interval = setInterval(() => {
-      setCurrentAnalysisStep(prev => {
-        if (prev >= analysisSteps.length - 1) return prev;
-        return prev + 1;
-      });
-    }, stepInterval);
+    if (useStreaming) {
+      // Streaming mode for /api/analyze — real progress from server
+      try {
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ formData })
+        });
 
-    try {
-      const apiEndpoint = formData.strategyMode === 'pmcc' ? '/api/pmcc' : formData.strategyMode === 'spreads' ? '/api/spreads' : '/api/analyze';
-      const response = await fetch(apiEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ formData })
-      });
+        if (!response.ok) {
+          throw new Error('Analysis failed');
+        }
 
-      clearInterval(interval);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-      if (!response.ok) {
-        throw new Error('Analysis failed');
-      }
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-      const result = await response.json();
-      setAnalysisResult(result);
-      setCurrentAnalysisStep(analysisSteps.length - 1);
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // keep incomplete line in buffer
 
-      setTimeout(() => {
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(line.slice(6));
+                if (event.type === 'step') {
+                  setCurrentAnalysisStep(event.index);
+                } else if (event.type === 'result') {
+                  setAnalysisResult(event.data);
+                  setCurrentAnalysisStep(analysisSteps.length - 1);
+                  setTimeout(() => {
+                    setIsAnalyzing(false);
+                    setAnalysisComplete(true);
+                  }, 500);
+                } else if (event.type === 'error') {
+                  throw new Error(event.message);
+                }
+              } catch (parseErr) {
+                if (parseErr.message !== 'Unexpected end of JSON input') {
+                  // Re-throw real errors (not just incomplete JSON)
+                  if (parseErr.message && !parseErr.message.includes('JSON')) {
+                    throw parseErr;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        setAnalysisError(error.message);
         setIsAnalyzing(false);
-        setAnalysisComplete(true);
-      }, 500);
+      }
+    } else {
+      // Non-streaming mode for pmcc/spreads — animated timer
+      const totalAnimationTime = 18000;
+      const stepInterval = Math.max(400, Math.min(1000, totalAnimationTime / analysisSteps.length));
 
-    } catch (error) {
-      clearInterval(interval);
-      setAnalysisError(error.message);
-      setIsAnalyzing(false);
+      const interval = setInterval(() => {
+        setCurrentAnalysisStep(prev => {
+          if (prev >= analysisSteps.length - 1) return prev;
+          return prev + 1;
+        });
+      }, stepInterval);
+
+      try {
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ formData })
+        });
+
+        clearInterval(interval);
+
+        if (!response.ok) {
+          throw new Error('Analysis failed');
+        }
+
+        const result = await response.json();
+        setAnalysisResult(result);
+        setCurrentAnalysisStep(analysisSteps.length - 1);
+
+        setTimeout(() => {
+          setIsAnalyzing(false);
+          setAnalysisComplete(true);
+        }, 500);
+
+      } catch (error) {
+        clearInterval(interval);
+        setAnalysisError(error.message);
+        setIsAnalyzing(false);
+      }
     }
   };
 
