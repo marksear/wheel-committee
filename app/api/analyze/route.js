@@ -1248,7 +1248,7 @@ ${marketDataText ? `# ━━━━━━━━━━━━━━━━━━━�
 # LIVE MARKET DATA (from Yahoo Finance)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**IMPORTANT: Use the live data below for your analysis. These are real-time prices, IV, and options chain data. Do NOT estimate values that are provided here — use the actual numbers. If data for a ticker is marked as unavailable, use your best estimates and note it.**
+**IMPORTANT: Use the live data below for your analysis. These are real-time prices, IV, and options chain data. Do NOT estimate values that are provided here — use the actual numbers. When selecting a strike, use the MID price (average of Bid and Ask columns) from the matching strike row as the premium value in your JSON output. Do NOT inflate or aggregate premiums. If data for a ticker is marked as unavailable, use your best estimates and note it.**
 
 ${marketDataText}
 
@@ -1442,6 +1442,14 @@ Be specific, practical, and conservative. Always prioritize capital preservation
 \`\`\`
 
 **Fill in all fields with actual data from your analysis. Use null for any field you cannot determine.**
+
+**Critical field definitions:**
+- \`premium\`: The MID price (average of bid and ask) of the SINGLE option contract you are recommending, expressed PER SHARE (not per contract). For example, if the bid is $1.50 and ask is $1.80, premium = 1.65. This is NOT a total, NOT per contract (×100), and NOT aggregated across multiple trades. It is the per-share mid-price of the specific strike and expiry you are recommending. USE THE LIVE OPTIONS DATA PROVIDED — do not estimate if real bid/ask data is available.
+- \`maxProfit\`: premium × 100 (per contract, in dollars)
+- \`collateralRequired\`: strike × 100 (total cash needed to secure the put)
+- \`dailyReturn\`: (premium / strike) / DTE × 100 (percentage)
+- \`breakeven\`: strike - premium (for puts) or strike + premium (for calls)
+- \`totalPremiumThisTrade\` (in summary): Sum of all recommended trade premiums × 100
 
 ---
 
