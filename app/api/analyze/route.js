@@ -1390,6 +1390,17 @@ Be specific, practical, and conservative. Always prioritize capital preservation
         "fundamentals": 1.5,
         "assignmentComfort": 1.5
       },
+      "calculations": {
+        "premiumBid": 1.40,
+        "premiumAsk": 1.60,
+        "premiumMid": 1.50,
+        "premiumSource": "$227 Put, Wed Feb 19 expiry, from live chain",
+        "dailyReturnCalc": "(1.50 / 227.00) / 2 × 100 = 0.33%",
+        "breakevenCalc": "227.00 - 1.50 = 225.50",
+        "maxProfitCalc": "1.50 × 100 = $150",
+        "collateralCalc": "227.00 × 100 = $22,700",
+        "annualizedCalc": "0.33% × 365 = 120.5% (simplified) or 47.5% (conservative)"
+      },
       "weeklyPlan": {
         "tradesPerWeek": 3,
         "projectedWeeklyPremium": 450,
@@ -1450,6 +1461,16 @@ Be specific, practical, and conservative. Always prioritize capital preservation
 - \`dailyReturn\`: (premium / strike) / DTE × 100 (percentage)
 - \`breakeven\`: strike - premium (for puts) or strike + premium (for calls)
 - \`totalPremiumThisTrade\` (in summary): Sum of all recommended trade premiums × 100
+- \`calculations\`: REQUIRED — Show your working. This object must contain:
+  - \`premiumBid\`: The bid price you read from the live data (per share)
+  - \`premiumAsk\`: The ask price you read from the live data (per share)
+  - \`premiumMid\`: (bid + ask) / 2 — this MUST equal the \`premium\` field
+  - \`premiumSource\`: Which strike, expiry, and data row you used (e.g. "$255 Put, Fri Feb 28 expiry, from live chain")
+  - \`dailyReturnCalc\`: Show the formula with actual numbers e.g. "(1.50 / 227.00) / 2 × 100 = 0.33%"
+  - \`breakevenCalc\`: Show the formula e.g. "227.00 - 1.50 = 225.50"
+  - \`maxProfitCalc\`: Show the formula e.g. "1.50 × 100 = $150"
+  - \`collateralCalc\`: Show the formula e.g. "227.00 × 100 = $22,700"
+  - \`annualizedCalc\`: Show the annualized return formula
 
 ---
 
@@ -1504,6 +1525,7 @@ function convertJsonTrades(jsonData, watchlistTickers) {
     rationale: trade.rationale,
     risks: trade.risks,
     scoreBreakdown: trade.scoreBreakdown,
+    calculations: trade.calculations,
     weeklyPlan: trade.weeklyPlan,
     details: null // No raw details when using JSON
   }))

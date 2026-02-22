@@ -2104,6 +2104,62 @@ JNJ"
                             </div>
                           )}
 
+                          {/* Calculations Block — show the math */}
+                          {trade.calculations && (
+                            <div className="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Brain className="w-4 h-4 text-slate-600" />
+                                <h4 className="text-sm font-bold text-slate-700">Calculations</h4>
+                              </div>
+                              <div className="space-y-2 font-mono text-xs">
+                                {trade.calculations.premiumSource && (
+                                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 p-2 bg-white rounded-lg border border-slate-100">
+                                    <span className="text-slate-500 font-sans font-medium min-w-[100px]">Source</span>
+                                    <span className="text-slate-700">{trade.calculations.premiumSource}</span>
+                                  </div>
+                                )}
+                                {(trade.calculations.premiumBid != null || trade.calculations.premiumAsk != null) && (
+                                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 p-2 bg-white rounded-lg border border-slate-100">
+                                    <span className="text-slate-500 font-sans font-medium min-w-[100px]">Premium</span>
+                                    <span className="text-slate-700">
+                                      Bid ${trade.calculations.premiumBid} / Ask ${trade.calculations.premiumAsk} → Mid <span className="font-bold text-emerald-700">${trade.calculations.premiumMid}</span>
+                                    </span>
+                                  </div>
+                                )}
+                                {trade.calculations.collateralCalc && (
+                                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 p-2 bg-white rounded-lg border border-slate-100">
+                                    <span className="text-slate-500 font-sans font-medium min-w-[100px]">Collateral</span>
+                                    <span className="text-slate-700">{trade.calculations.collateralCalc}</span>
+                                  </div>
+                                )}
+                                {trade.calculations.maxProfitCalc && (
+                                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 p-2 bg-white rounded-lg border border-slate-100">
+                                    <span className="text-slate-500 font-sans font-medium min-w-[100px]">Max Profit</span>
+                                    <span className="text-slate-700">{trade.calculations.maxProfitCalc}</span>
+                                  </div>
+                                )}
+                                {trade.calculations.breakevenCalc && (
+                                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 p-2 bg-white rounded-lg border border-slate-100">
+                                    <span className="text-slate-500 font-sans font-medium min-w-[100px]">Breakeven</span>
+                                    <span className="text-slate-700">{trade.calculations.breakevenCalc}</span>
+                                  </div>
+                                )}
+                                {trade.calculations.dailyReturnCalc && (
+                                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 p-2 bg-white rounded-lg border border-slate-100">
+                                    <span className="text-slate-500 font-sans font-medium min-w-[100px]">Daily Return</span>
+                                    <span className="text-slate-700">{trade.calculations.dailyReturnCalc}</span>
+                                  </div>
+                                )}
+                                {trade.calculations.annualizedCalc && (
+                                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 p-2 bg-white rounded-lg border border-slate-100">
+                                    <span className="text-slate-500 font-sans font-medium min-w-[100px]">Annualized</span>
+                                    <span className="text-slate-700">{trade.calculations.annualizedCalc}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
                           {/* Full Details (fallback for non-JSON responses) */}
                           {trade.details && (
                             <details className="mt-3">
