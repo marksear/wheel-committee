@@ -55,6 +55,7 @@ export async function POST(request) {
         const claudeStream = client.messages.stream({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 16384,
+          temperature: 0,
           messages: [
             {
               role: 'user',
