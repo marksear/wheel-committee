@@ -83,10 +83,6 @@ export default function WheelCommitteeApp() {
   const [analysisError, setAnalysisError] = useState(null);
   const [expandedTrade, setExpandedTrade] = useState(null);
   const [activeTab, setActiveTab] = useState('new');
-  const [resultsTab, setResultsTab] = useState('analysis');
-  const [managementData, setManagementData] = useState({}); // { ticker: { livePrice, loading, ... } }
-  const [rollingPosition, setRollingPosition] = useState(null); // position currently being rolled
-  const [rollResult, setRollResult] = useState(null);
   const [ivRankData, setIvRankData] = useState({}); // { ticker: { ivRank, ivPercentile, currentIV, ... } }
   const [ivRankLoading, setIvRankLoading] = useState(false);
   const [ivTooltipTicker, setIvTooltipTicker] = useState(null); // which ticker's IV tooltip is showing
@@ -115,8 +111,6 @@ export default function WheelCommitteeApp() {
     targetDelta: '0.18',
     targetDte: '2',
     marketOutlook: 'neutral',
-    // Strategy Mode
-    strategyMode: 'wheel',
   });
 
   const steps = [
@@ -134,46 +128,6 @@ export default function WheelCommitteeApp() {
       .split('\n')
       .map(line => line.trim().toUpperCase())
       .filter(t => t.length >= 1 && t.length <= 5 && /^[A-Z]+$/.test(t));
-
-    if (formData.strategyMode === 'pmcc') {
-      const steps = [
-        'Loading account data...',
-        'Checking available capital...',
-      ];
-      tickers.forEach(ticker => {
-        steps.push(`Screening ${ticker} for LEAPS...`);
-      });
-      steps.push(
-        'Identifying LEAPS candidates (Delta ≥0.80)...',
-        'Checking DTE >365 days...',
-        'Evaluating short call premiums...',
-        'Comparing extrinsic values...',
-        'Calculating max profit spreads...',
-        'Estimating capital savings...',
-        'Generating PMCC recommendations...'
-      );
-      return steps;
-    }
-
-    if (formData.strategyMode === 'spreads') {
-      const steps = [
-        'Loading account data...',
-        'Checking buying power...',
-      ];
-      tickers.forEach(ticker => {
-        steps.push(`Fetching ${ticker} options chain...`);
-      });
-      steps.push(
-        'Screening Bull Put Spreads...',
-        'Screening Bear Call Spreads...',
-        'Building Iron Condors...',
-        'Calculating Probability of Profit...',
-        'Evaluating risk/reward ratios...',
-        'Computing P&L profiles...',
-        'Generating spread recommendations...'
-      );
-      return steps;
-    }
 
     const steps = [
       'Loading account data...',
@@ -210,104 +164,56 @@ export default function WheelCommitteeApp() {
     setCurrentAnalysisStep(0);
     setAnalysisError(null);
 
-    const apiEndpoint = formData.strategyMode === 'pmcc' ? '/api/pmcc' : formData.strategyMode === 'spreads' ? '/api/spreads' : '/api/analyze';
-    const useStreaming = formData.strategyMode !== 'pmcc' && formData.strategyMode !== 'spreads';
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ formData })
+      });
 
-    if (useStreaming) {
-      // Streaming mode for /api/analyze — real progress from server
-      try {
-        const response = await fetch(apiEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ formData })
-        });
+      if (!response.ok) {
+        throw new Error('Analysis failed');
+      }
 
-        if (!response.ok) {
-          throw new Error('Analysis failed');
-        }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // keep incomplete line in buffer
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const event = JSON.parse(line.slice(6));
-                if (event.type === 'step') {
-                  setCurrentAnalysisStep(event.index);
-                } else if (event.type === 'result') {
-                  setAnalysisResult(event.data);
-                  setCurrentAnalysisStep(analysisSteps.length - 1);
-                  setTimeout(() => {
-                    setIsAnalyzing(false);
-                    setAnalysisComplete(true);
-                  }, 500);
-                } else if (event.type === 'error') {
-                  throw new Error(event.message);
-                }
-              } catch (parseErr) {
-                if (parseErr.message !== 'Unexpected end of JSON input') {
-                  // Re-throw real errors (not just incomplete JSON)
-                  if (parseErr.message && !parseErr.message.includes('JSON')) {
-                    throw parseErr;
-                  }
-                }
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === 'step') {
+                setCurrentAnalysisStep(event.index);
+              } else if (event.type === 'result') {
+                setAnalysisResult(event.data);
+                setCurrentAnalysisStep(analysisSteps.length - 1);
+                setTimeout(() => {
+                  setIsAnalyzing(false);
+                  setAnalysisComplete(true);
+                }, 500);
+              } else if (event.type === 'error') {
+                throw new Error(event.message);
+              }
+            } catch (parseErr) {
+              if (parseErr.message && !parseErr.message.includes('JSON')) {
+                throw parseErr;
               }
             }
           }
         }
-      } catch (error) {
-        setAnalysisError(error.message);
-        setIsAnalyzing(false);
       }
-    } else {
-      // Non-streaming mode for pmcc/spreads — animated timer
-      const totalAnimationTime = 18000;
-      const stepInterval = Math.max(400, Math.min(1000, totalAnimationTime / analysisSteps.length));
-
-      const interval = setInterval(() => {
-        setCurrentAnalysisStep(prev => {
-          if (prev >= analysisSteps.length - 1) return prev;
-          return prev + 1;
-        });
-      }, stepInterval);
-
-      try {
-        const response = await fetch(apiEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ formData })
-        });
-
-        clearInterval(interval);
-
-        if (!response.ok) {
-          throw new Error('Analysis failed');
-        }
-
-        const result = await response.json();
-        setAnalysisResult(result);
-        setCurrentAnalysisStep(analysisSteps.length - 1);
-
-        setTimeout(() => {
-          setIsAnalyzing(false);
-          setAnalysisComplete(true);
-        }, 500);
-
-      } catch (error) {
-        clearInterval(interval);
-        setAnalysisError(error.message);
-        setIsAnalyzing(false);
-      }
+    } catch (error) {
+      setAnalysisError(error.message);
+      setIsAnalyzing(false);
     }
   };
 
@@ -362,72 +268,6 @@ export default function WheelCommitteeApp() {
         )}
       </span>
     );
-  };
-
-  // Fetch live prices for open positions (for management tab)
-  const fetchManagementData = async (positions) => {
-    const tickers = [...new Set(positions.map(p => p.ticker))];
-    const newData = {};
-    tickers.forEach(t => { newData[t] = { loading: true }; });
-    setManagementData(newData);
-
-    try {
-      const response = await fetch('/api/quotes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers })
-      });
-      if (response.ok) {
-        const quotes = await response.json();
-        const updated = {};
-        for (const ticker of tickers) {
-          updated[ticker] = {
-            loading: false,
-            livePrice: quotes[ticker]?.price ?? null,
-          };
-        }
-        setManagementData(updated);
-        return;
-      }
-    } catch {
-      // fall through to fallback
-    }
-
-    // Fallback: try to get prices from analysis results
-    const updated = {};
-    tickers.forEach(t => { updated[t] = { loading: false, livePrice: null }; });
-    if (analysisResult) {
-      const allTrades = [
-        ...(analysisResult.trades || []),
-        ...(analysisResult.pmccTrades || []),
-        ...(analysisResult.spreadTrades || [])
-      ];
-      for (const trade of allTrades) {
-        if (trade.ticker && tickers.includes(trade.ticker) && trade.currentPrice) {
-          updated[trade.ticker] = { loading: false, livePrice: parseFloat(trade.currentPrice) };
-        }
-      }
-    }
-    setManagementData(updated);
-  };
-
-  const handleRoll = async (position) => {
-    setRollingPosition(position.ticker + '-' + position.type);
-    setRollResult(null);
-    try {
-      const response = await fetch('/api/manage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ position, formData })
-      });
-      if (!response.ok) throw new Error('Roll analysis failed');
-      const result = await response.json();
-      setRollResult({ ticker: position.ticker, type: position.type, ...result });
-    } catch (error) {
-      setRollResult({ ticker: position.ticker, type: position.type, error: error.message });
-    } finally {
-      setRollingPosition(null);
-    }
   };
 
   // Star rating component
@@ -765,74 +605,6 @@ JNJ"
             <h2 className="text-2xl font-bold text-gray-900">Trade Settings</h2>
             <p className="text-gray-600">Configure your trade preferences</p>
 
-            {/* Strategy Mode Selector */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Strategy Mode</label>
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  onClick={() => setFormData({ ...formData, strategyMode: 'wheel' })}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    formData.strategyMode === 'wheel'
-                      ? 'border-emerald-500 bg-emerald-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <RefreshCw className={`w-5 h-5 ${formData.strategyMode === 'wheel' ? 'text-emerald-600' : 'text-gray-400'}`} />
-                    <span className="font-bold text-gray-900">The Wheel</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Cash-secured puts & covered calls</p>
-                  <p className="text-xs text-gray-400 mt-1">Classic income strategy</p>
-                </button>
-                <button
-                  onClick={() => setFormData({ ...formData, strategyMode: 'pmcc' })}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    formData.strategyMode === 'pmcc'
-                      ? 'border-teal-500 bg-teal-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className={`w-5 h-5 ${formData.strategyMode === 'pmcc' ? 'text-teal-600' : 'text-gray-400'}`} />
-                    <span className="font-bold text-gray-900">PMCC</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Poor Man's Covered Call via LEAPS</p>
-                  <p className="text-xs text-gray-400 mt-1">~70-80% less capital</p>
-                </button>
-                <button
-                  onClick={() => setFormData({ ...formData, strategyMode: 'spreads' })}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    formData.strategyMode === 'spreads'
-                      ? 'border-violet-500 bg-violet-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Layers className={`w-5 h-5 ${formData.strategyMode === 'spreads' ? 'text-violet-600' : 'text-gray-400'}`} />
-                    <span className="font-bold text-gray-900">Spreads</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Verticals & Iron Condors</p>
-                  <p className="text-xs text-gray-400 mt-1">Risk-defined income</p>
-                </button>
-              </div>
-            </div>
-
-            {formData.strategyMode === 'pmcc' && (
-              <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
-                <p className="text-sm text-teal-800">
-                  <strong>PMCC Mode:</strong> We'll identify LEAPS calls (Delta ≥0.80, &gt;365 DTE) and pair them with short-term calls to generate income — using ~70-80% less capital than owning 100 shares.
-                </p>
-              </div>
-            )}
-
-            {formData.strategyMode === 'spreads' && (
-              <div className="bg-violet-50 border border-violet-200 rounded-lg p-4">
-                <p className="text-sm text-violet-800">
-                  <strong>Spreads Mode:</strong> We'll analyse Bull Put Spreads, Bear Call Spreads, and Iron Condors for each ticker — risk-defined strategies with known max profit and max loss.
-                </p>
-              </div>
-            )}
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Target Delta</label>
@@ -911,15 +683,9 @@ JNJ"
               </div>
             </div>
 
-            <div className={`${formData.strategyMode === 'pmcc' ? 'bg-teal-50 border-teal-200' : formData.strategyMode === 'spreads' ? 'bg-violet-50 border-violet-200' : 'bg-emerald-50 border-emerald-200'} border rounded-lg p-4`}>
-              <p className={`text-sm ${formData.strategyMode === 'pmcc' ? 'text-teal-800' : formData.strategyMode === 'spreads' ? 'text-violet-800' : 'text-emerald-800'}`}>
-                {formData.strategyMode === 'pmcc' ? (
-                  <><strong>PMCC Summary:</strong> Scanning watchlist for LEAPS candidates (Delta ≥0.80, &gt;365 DTE) with profitable short call pairings. Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month income with reduced capital.</>
-                ) : formData.strategyMode === 'spreads' ? (
-                  <><strong>Spreads Summary:</strong> Scanning for Bull Put Spreads, Bear Call Spreads, and Iron Condors at ~{parseFloat(formData.targetDelta) * 100}% delta, {formData.targetDte} DTE. Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month in premium with defined risk.</>
-                ) : (
-                  <><strong>Settings Summary:</strong> Targeting ~{parseFloat(formData.targetDelta) * 100}% delta puts, {formData.targetDte} DTE, on stocks scoring {formData.minWheelScore}+. Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month in premium.</>
-                )}
+            <div className="bg-emerald-50 border-emerald-200 border rounded-lg p-4">
+              <p className="text-sm text-emerald-800">
+                <strong>Settings Summary:</strong> Targeting ~{parseFloat(formData.targetDelta) * 100}% delta puts, {formData.targetDte} DTE, on stocks scoring {formData.minWheelScore}+. Goal: ${parseInt(formData.targetMonthlyIncome).toLocaleString()}/month in premium.
               </p>
             </div>
           </div>
@@ -935,7 +701,7 @@ JNJ"
                 <RefreshCw className="absolute inset-0 m-auto w-8 h-8 text-emerald-600" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900">
-                {formData.strategyMode === 'pmcc' ? 'PMCC Scanner Running' : formData.strategyMode === 'spreads' ? 'Spreads Scanner Running' : 'Wheel Committee in Session'}
+                Wheel Committee in Session
               </h2>
 
               <div className="max-w-md mx-auto text-left bg-gray-50 rounded-xl p-4">
@@ -990,7 +756,7 @@ JNJ"
                     <p className="text-emerald-200 text-sm">Wheel Committee Report</p>
                     <h1 className="text-2xl font-bold mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h1>
                     <p className="text-emerald-300 mt-2">
-                      {formData.strategyMode === 'pmcc' ? 'PMCC Mode' : formData.strategyMode === 'spreads' ? 'Spreads Mode' : (analysisResult.mode || (formData.mode === 'cash_secured' ? 'Cash-Secured Mode' : 'Margin Mode'))} • {formData.watchlist.split('\n').filter(t => t.trim()).length} stocks analyzed
+                      {analysisResult.mode || (formData.mode === 'cash_secured' ? 'Cash-Secured Mode' : 'Margin Mode')} • {formData.watchlist.split('\n').filter(t => t.trim()).length} stocks analyzed
                     </p>
                   </div>
                 </div>
@@ -1109,50 +875,9 @@ JNJ"
                 );
               })()}
 
-              {/* Results Tab Bar */}
-              {(() => {
-                const positions = parsePositions(formData.currentPositions);
-                const hasPositions = positions.length > 0;
-                const alertCount = hasPositions ? positions.reduce((count, pos) => {
-                  const price = managementData[pos.ticker]?.livePrice;
-                  return count + getPositionAlerts(pos, price).length;
-                }, 0) : 0;
-                return (
-                  <div className="flex gap-2 bg-gray-100 rounded-xl p-1">
-                    <button
-                      onClick={() => setResultsTab('analysis')}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        resultsTab === 'analysis'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Analysis Results
-                    </button>
-                    <button
-                      onClick={() => {
-                        setResultsTab('manage');
-                        if (hasPositions) fetchManagementData(positions);
-                      }}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                        resultsTab === 'manage'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Manage Trades
-                      {alertCount > 0 && (
-                        <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
-                          {alertCount}
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                );
-              })()}
 
-              {/* Management Panel */}
-              {resultsTab === 'manage' && (() => {
+              {/* Management panel removed — Wheel only */}
+              {false && (() => {
                 const positions = parsePositions(formData.currentPositions);
                 if (positions.length === 0) {
                   return (
@@ -1446,11 +1171,8 @@ JNJ"
                 );
               })()}
 
-              {/* Analysis Results (only show when analysis tab is active) */}
-              {resultsTab === 'analysis' && <>
-
-              {/* PMCC Results Table */}
-              {formData.strategyMode === 'pmcc' && analysisResult.pmccTrades && analysisResult.pmccTrades.length > 0 && (
+              {/* PMCC removed — keeping code dead for now */}
+              {false && analysisResult.pmccTrades && analysisResult.pmccTrades.length > 0 && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="p-4 border-b border-gray-100">
                     <h2 className="font-bold text-gray-900">PMCC Analysis — LEAPS + Short Call Pairings</h2>
@@ -1603,8 +1325,8 @@ JNJ"
                 </div>
               )}
 
-              {/* Spreads Results */}
-              {formData.strategyMode === 'spreads' && analysisResult.spreadTrades && analysisResult.spreadTrades.length > 0 && (
+              {/* Spreads removed — keeping code dead for now */}
+              {false && analysisResult.spreadTrades && analysisResult.spreadTrades.length > 0 && (
                 <div className="space-y-4">
                   {/* Group trades by ticker */}
                   {(() => {
@@ -1825,8 +1547,8 @@ JNJ"
                 </div>
               )}
 
-              {/* Spreads Summary */}
-              {formData.strategyMode === 'spreads' && analysisResult.spreadsSummary && (
+              {/* Spreads summary removed */}
+              {false && analysisResult.spreadsSummary && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="p-4 border-b border-gray-100">
                     <h2 className="font-bold text-gray-900">Spreads Summary</h2>
@@ -1867,8 +1589,8 @@ JNJ"
                 </div>
               )}
 
-              {/* Trade Recommendations from API (Wheel mode) */}
-              {formData.strategyMode !== 'pmcc' && formData.strategyMode !== 'spreads' && analysisResult.trades && analysisResult.trades.length > 0 && (
+              {/* Trade Recommendations */}
+              {analysisResult.trades && analysisResult.trades.length > 0 && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="p-4 border-b border-gray-100">
                     <h2 className="font-bold text-gray-900">Wheel Score™ Analysis</h2>
@@ -2438,40 +2160,22 @@ JNJ"
                   </pre>
                 </div>
               </div>
-
-              </>}
             </div>
           );
         }
 
         return (
           <div className="text-center py-12 space-y-6">
-            {formData.strategyMode === 'pmcc' ? (
-              <TrendingUp className="w-16 h-16 text-teal-500 mx-auto" />
-            ) : formData.strategyMode === 'spreads' ? (
-              <Layers className="w-16 h-16 text-violet-500 mx-auto" />
-            ) : (
-              <RefreshCw className="w-16 h-16 text-emerald-500 mx-auto" />
-            )}
-            <h2 className="text-2xl font-bold text-gray-900">
-              {formData.strategyMode === 'pmcc' ? 'Ready to Scan for PMCC' : formData.strategyMode === 'spreads' ? 'Ready to Scan Spreads' : 'Ready to Analyze'}
-            </h2>
+            <RefreshCw className="w-16 h-16 text-emerald-500 mx-auto" />
+            <h2 className="text-2xl font-bold text-gray-900">Ready to Analyze</h2>
             <p className="text-gray-600 max-w-md mx-auto">
-              {formData.strategyMode === 'pmcc'
-                ? 'We\'ll identify LEAPS candidates and pair them with short calls for capital-efficient income.'
-                : formData.strategyMode === 'spreads'
-                ? 'We\'ll analyse Bull Put Spreads, Bear Call Spreads, and Iron Condors with P&L profiles.'
-                : 'The Wheel Committee will calculate Wheel Scores™ and find the best premium opportunities.'}
+              The Wheel Committee will calculate Wheel Scores™ and find the best premium opportunities.
             </p>
             <button
               onClick={runAnalysis}
-              className={`px-8 py-4 text-white font-medium rounded-xl transition-colors shadow-lg ${
-                formData.strategyMode === 'spreads'
-                  ? 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600'
-                  : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
-              }`}
+              className="px-8 py-4 text-white font-medium rounded-xl transition-colors shadow-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
             >
-              {formData.strategyMode === 'pmcc' ? 'Find PMCC Opportunities' : formData.strategyMode === 'spreads' ? 'Find Spread Opportunities' : 'Find Wheel Opportunities'}
+              Find Wheel Opportunities
             </button>
           </div>
         );
