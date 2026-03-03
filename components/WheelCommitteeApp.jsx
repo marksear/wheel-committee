@@ -1697,9 +1697,9 @@ JNJ"
                                       <td className="px-4 py-2 font-bold text-gray-900 text-right border-l border-gray-200">
                                         ${trade.strike?.toFixed(2)}
                                       </td>
-                                      <td className="border-l border-gray-200" rowSpan={4}></td>
-                                      <td className="border-l border-gray-200" rowSpan={4}></td>
-                                      <td className="border-l border-gray-200" rowSpan={4}></td>
+                                      <td className="border-l border-gray-200" rowSpan={3}></td>
+                                      <td className="border-l border-gray-200" rowSpan={3}></td>
+                                      <td className="border-l border-gray-200" rowSpan={3}></td>
                                     </tr>
                                     {/* Premium */}
                                     <tr className="bg-emerald-50">
@@ -1713,13 +1713,6 @@ JNJ"
                                       <td className="px-4 py-2 font-semibold text-gray-700">Cost Basis</td>
                                       <td className="px-4 py-2 font-bold text-gray-900 text-right border-l border-gray-200">
                                         ${trade.breakeven?.toFixed(2) || (trade.strike - trade.premium).toFixed(2)}
-                                      </td>
-                                    </tr>
-                                    {/* Collateral = breakeven × 100 */}
-                                    <tr className="bg-emerald-50">
-                                      <td className="px-4 py-2 font-semibold text-gray-700">Collateral</td>
-                                      <td className="px-4 py-2 font-bold text-gray-900 text-right border-l border-gray-200">
-                                        ${((trade.breakeven || (trade.strike - trade.premium)) * 100).toLocaleString(undefined, {maximumFractionDigits: 0})}
                                       </td>
                                     </tr>
                                     {/* Returns Row — highlighted */}
@@ -1751,6 +1744,11 @@ JNJ"
 
                               {/* Extra details row beneath table */}
                               <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                                {trade.strike && trade.premium && (
+                                  <span className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-gray-600">
+                                    Collateral: <strong className="text-gray-900">${((trade.breakeven || (trade.strike - trade.premium)) * 100).toLocaleString(undefined, {maximumFractionDigits: 0})}</strong>
+                                  </span>
+                                )}
                                 {trade.delta && (
                                   <span className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-gray-600">
                                     Delta: <strong className="text-gray-900">{trade.delta}</strong>
