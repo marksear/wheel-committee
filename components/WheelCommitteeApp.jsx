@@ -1668,89 +1668,104 @@ JNJ"
                             )}
                           </div>
 
-                          {/* Quick Stats Grid */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 py-4">
-                            {trade.currentPrice && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Current Price</p>
-                                <p className="font-bold text-gray-900">${trade.currentPrice}</p>
+                          {/* Trade Spreadsheet */}
+                          {trade.strike && trade.premium && (
+                            <div className="py-4">
+                              <div className="bg-white rounded-xl border-2 border-gray-300 overflow-hidden shadow-sm">
+                                {/* Table Header */}
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="bg-gray-800 text-white">
+                                      <th className="px-4 py-2.5 text-left font-bold" colSpan={2}>
+                                        {trade.tradeType === 'covered call' ? 'Covered Call' : 'Cash-Secured Put'}
+                                      </th>
+                                      <th className="px-4 py-2.5 text-center font-bold border-l border-gray-600">
+                                        {trade.dte || '—'} DTE
+                                      </th>
+                                      <th className="px-4 py-2.5 text-center font-bold border-l border-gray-600">
+                                        Daily
+                                      </th>
+                                      <th className="px-4 py-2.5 text-center font-bold border-l border-gray-600">
+                                        Yearly
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-200">
+                                    {/* Strike */}
+                                    <tr className="bg-emerald-50">
+                                      <td className="px-4 py-2 font-semibold text-gray-700 w-28">Strike</td>
+                                      <td className="px-4 py-2 font-bold text-gray-900 text-right border-l border-gray-200">
+                                        ${trade.strike?.toFixed(2)}
+                                      </td>
+                                      <td className="border-l border-gray-200" rowSpan={4}></td>
+                                      <td className="border-l border-gray-200" rowSpan={4}></td>
+                                      <td className="border-l border-gray-200" rowSpan={4}></td>
+                                    </tr>
+                                    {/* Premium */}
+                                    <tr className="bg-emerald-50">
+                                      <td className="px-4 py-2 font-semibold text-gray-700">Premium</td>
+                                      <td className="px-4 py-2 font-bold text-emerald-700 text-right border-l border-gray-200">
+                                        ${trade.premium?.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                    {/* Breakeven / Cost */}
+                                    <tr className="bg-emerald-50">
+                                      <td className="px-4 py-2 font-semibold text-gray-700">Cost Basis</td>
+                                      <td className="px-4 py-2 font-bold text-gray-900 text-right border-l border-gray-200">
+                                        ${trade.breakeven?.toFixed(2) || (trade.strike - trade.premium).toFixed(2)}
+                                      </td>
+                                    </tr>
+                                    {/* Collateral */}
+                                    <tr className="bg-emerald-50">
+                                      <td className="px-4 py-2 font-semibold text-gray-700">Collateral</td>
+                                      <td className="px-4 py-2 font-bold text-gray-900 text-right border-l border-gray-200">
+                                        ${trade.collateralRequired?.toLocaleString() || (trade.strike * 100).toLocaleString()}
+                                      </td>
+                                    </tr>
+                                    {/* Returns Row — highlighted */}
+                                    <tr className="bg-gray-800 text-white">
+                                      <td className="px-4 py-3 font-bold" colSpan={2}>% Return</td>
+                                      <td className="px-4 py-3 font-bold text-center text-lg border-l border-gray-600">
+                                        {trade.premium && trade.strike ? ((trade.premium / trade.strike) * 100).toFixed(2) : '—'}%
+                                      </td>
+                                      <td className={`px-4 py-3 font-bold text-center text-lg border-l border-gray-600 ${
+                                        trade.dailyReturn >= 0.30 ? 'text-emerald-400' : 'text-red-400'
+                                      }`}>
+                                        {trade.dailyReturn?.toFixed(2) || (trade.premium && trade.strike && trade.dte ? ((trade.premium / trade.strike) / trade.dte * 100).toFixed(2) : '—')}%
+                                      </td>
+                                      <td className="px-4 py-3 font-bold text-center text-lg border-l border-gray-600 text-emerald-400">
+                                        {trade.annualizedReturn?.toFixed(2) || (trade.dailyReturn ? (trade.dailyReturn * 365).toFixed(2) : '—')}%
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
                               </div>
-                            )}
-                            {trade.strike && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Strike Price</p>
-                                <p className="font-bold text-gray-900">${trade.strike}</p>
+
+                              {/* Extra details row beneath table */}
+                              <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                                {trade.delta && (
+                                  <span className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-gray-600">
+                                    Delta: <strong className="text-gray-900">{trade.delta}</strong>
+                                  </span>
+                                )}
+                                {trade.ivRank != null && (
+                                  <span className={`px-2.5 py-1 border rounded-lg ${trade.ivRank >= 50 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                    IV Rank: <strong>{trade.ivRank}%</strong>
+                                  </span>
+                                )}
+                                {trade.maxProfit && (
+                                  <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700">
+                                    Max Profit: <strong>${trade.maxProfit}</strong>
+                                  </span>
+                                )}
+                                {trade.currentPrice && (
+                                  <span className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-gray-600">
+                                    Current Price: <strong className="text-gray-900">${trade.currentPrice}</strong>
+                                  </span>
+                                )}
                               </div>
-                            )}
-                            {trade.premium && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Premium</p>
-                                <p className="font-bold text-emerald-600">${trade.premium}</p>
-                              </div>
-                            )}
-                            {trade.dte && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Days to Expiry</p>
-                                <p className="font-bold text-gray-900">{trade.dte} DTE</p>
-                              </div>
-                            )}
-                            {trade.delta && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Delta</p>
-                                <p className="font-bold text-gray-900">{trade.delta}</p>
-                              </div>
-                            )}
-                            {trade.ivRank != null && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">IV Rank</p>
-                                <p className={`font-bold ${trade.ivRank >= 50 ? 'text-emerald-600' : 'text-amber-600'}`}>{trade.ivRank}%</p>
-                              </div>
-                            )}
-                            {trade.collateralRequired && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Collateral Required</p>
-                                <p className="font-bold text-gray-900">${trade.collateralRequired.toLocaleString()}</p>
-                              </div>
-                            )}
-                            {trade.maxProfit && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Max Profit</p>
-                                <p className="font-bold text-emerald-600">${trade.maxProfit}</p>
-                              </div>
-                            )}
-                            {trade.breakeven && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Breakeven</p>
-                                <p className="font-bold text-gray-900">${trade.breakeven}</p>
-                              </div>
-                            )}
-                            {trade.dailyReturn && (
-                              <div className={`rounded-lg p-3 border ${trade.dailyReturn >= 0.30 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
-                                <p className="text-xs text-gray-500">Daily Return</p>
-                                <p className={`font-bold ${trade.dailyReturn >= 0.30 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                  {trade.dailyReturn.toFixed(2)}%/day {trade.dailyReturn >= 0.30 ? '✓' : '✗'}
-                                </p>
-                              </div>
-                            )}
-                            {trade.weeklyReturn && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Weekly Return</p>
-                                <p className="font-bold text-emerald-600">{trade.weeklyReturn}%</p>
-                              </div>
-                            )}
-                            {trade.monthlyReturn && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Monthly Return</p>
-                                <p className="font-bold text-emerald-600">{trade.monthlyReturn}%</p>
-                              </div>
-                            )}
-                            {trade.annualizedReturn && (
-                              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-500">Annualized Return</p>
-                                <p className="font-bold text-emerald-600">{trade.annualizedReturn}%</p>
-                              </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
 
                           {/* Expiration & Earnings Row */}
                           <div className="flex flex-wrap gap-4 mb-3 text-sm">
