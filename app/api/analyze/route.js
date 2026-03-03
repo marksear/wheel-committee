@@ -1449,6 +1449,7 @@ Be specific, practical, and conservative. Always prioritize capital preservation
         "premiumAsk": 1.60,
         "premiumMid": 1.50,
         "premiumSource": "$227 Put, Wed Feb 19 expiry, from live chain",
+        "dte": 2,
         "dailyReturnCalc": "(1.50 / 227.00) / 2 × 100 = 0.33%",
         "breakevenCalc": "227.00 - 1.50 = 225.50",
         "maxProfitCalc": "1.50 × 100 = $150",
@@ -1510,9 +1511,10 @@ Be specific, practical, and conservative. Always prioritize capital preservation
 
 **Critical field definitions:**
 - \`premium\`: The MID price (average of bid and ask) of the SINGLE option contract you are recommending, expressed PER SHARE (not per contract). For example, if the bid is $1.50 and ask is $1.80, premium = 1.65. This is NOT a total, NOT per contract (×100), and NOT aggregated across multiple trades. It is the per-share mid-price of the specific strike and expiry you are recommending. USE THE LIVE OPTIONS DATA PROVIDED — do not estimate if real bid/ask data is available.
+- \`dte\`: MUST match the DTE shown in the live data header for the expiry you selected (e.g. if the data says "Expiry: Wed Mar 5, 2025 (2 DTE)" then dte = 2). Do NOT calculate DTE yourself — use the exact number from the live data. This is critical because all return calculations depend on it.
 - \`maxProfit\`: premium × 100 (per contract, in dollars)
 - \`collateralRequired\`: strike × 100 (total cash needed to secure the put)
-- \`dailyReturn\`: (premium / strike) / DTE × 100 (percentage)
+- \`dailyReturn\`: (premium / strike) / DTE × 100 (percentage) — use the DTE from the live data header
 - \`breakeven\`: strike - premium (for puts) or strike + premium (for calls)
 - \`totalPremiumThisTrade\` (in summary): Sum of all recommended trade premiums × 100
 - \`calculations\`: REQUIRED — Show your working. This object must contain:
@@ -1520,7 +1522,8 @@ Be specific, practical, and conservative. Always prioritize capital preservation
   - \`premiumAsk\`: The ask price you read from the live data (per share)
   - \`premiumMid\`: (bid + ask) / 2 — this MUST equal the \`premium\` field
   - \`premiumSource\`: Which strike, expiry, and data row you used (e.g. "$255 Put, Fri Feb 28 expiry, from live chain")
-  - \`dailyReturnCalc\`: Show the formula with actual numbers e.g. "(1.50 / 227.00) / 2 × 100 = 0.33%"
+  - \`dte\`: The DTE value from the live data header for the selected expiry — must match the \`dte\` field above
+  - \`dailyReturnCalc\`: Show the formula with actual numbers e.g. "(1.50 / 227.00) / 2 × 100 = 0.33%" — the DTE divisor must match the \`dte\` field
   - \`breakevenCalc\`: Show the formula e.g. "227.00 - 1.50 = 225.50"
   - \`maxProfitCalc\`: Show the formula e.g. "1.50 × 100 = $150"
   - \`collateralCalc\`: Show the formula e.g. "227.00 × 100 = $22,700"
