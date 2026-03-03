@@ -143,7 +143,7 @@ function buildFullPrompt(formData, marketDataText = '') {
 
 **DTE preference:** Prefer 0-7 DTE for stocks with Mon/Wed/Fri expirations (maximum theta decay). Use 21-30 DTE for stocks with monthly-only options.
 
-**Daily return target:** ≥0.30%/day = (premium / strike) / DTE × 100. Skip trades below 0.20%/day.
+**Daily return target:** ≥0.30%/day. Formula: breakeven = strike - premium, then dailyReturn = (premium / breakeven) / DTE × 100. Skip trades below 0.20%/day.
 
 **Earnings rule:** Do NOT open positions if earnings <21 days away. Flag the earnings date and risk level.
 
@@ -278,8 +278,8 @@ Brief: projected weekly/monthly premium, total collateral deployed.
       "dailyReturn": 0.33,
       "weeklyReturn": 0.99,
       "monthlyReturn": 3.96,
-      "annualizedReturn": 47.5,
-      "collateralRequired": 22700,
+      "annualizedReturn": 120.5,
+      "collateralRequired": 22550,
       "maxProfit": 150,
       "breakeven": 225.50,
       "assignmentComfort": "Yes - would own at $225.50 basis",
@@ -300,11 +300,11 @@ Brief: projected weekly/monthly premium, total collateral deployed.
         "premiumMid": 1.50,
         "premiumSource": "$227 Put, Wed Feb 19 expiry, from live chain",
         "dte": 2,
-        "dailyReturnCalc": "(1.50 / 227.00) / 2 × 100 = 0.33%",
         "breakevenCalc": "227.00 - 1.50 = 225.50",
+        "collateralCalc": "225.50 × 100 = $22,550",
+        "dailyReturnCalc": "(1.50 / 225.50) / 2 × 100 = 0.33%",
         "maxProfitCalc": "1.50 × 100 = $150",
-        "collateralCalc": "227.00 × 100 = $22,700",
-        "annualizedCalc": "0.33% × 365 = 120.5% (simplified) or 47.5% (conservative)"
+        "annualizedCalc": "0.33% × 365 = 120.5%"
       },
       "weeklyPlan": {
         "tradesPerWeek": 3,
@@ -362,10 +362,11 @@ Brief: projected weekly/monthly premium, total collateral deployed.
 **Critical field definitions:**
 - \`premium\`: The MID price (average of bid and ask) of the SINGLE option contract you are recommending, expressed PER SHARE (not per contract). For example, if the bid is $1.50 and ask is $1.80, premium = 1.65. This is NOT a total, NOT per contract (×100), and NOT aggregated across multiple trades. It is the per-share mid-price of the specific strike and expiry you are recommending. USE THE LIVE OPTIONS DATA PROVIDED — do not estimate if real bid/ask data is available.
 - \`dte\`: MUST match the DTE shown in the live data header for the expiry you selected (e.g. if the data says "Expiry: Wed Mar 5, 2025 (2 DTE)" then dte = 2). Do NOT calculate DTE yourself — use the exact number from the live data. This is critical because all return calculations depend on it.
+- \`breakeven\`: strike - premium (for puts) or strike + premium (for calls). This is the cost basis per share.
+- \`collateralRequired\`: breakeven × 100 (actual capital at risk, NOT strike × 100)
 - \`maxProfit\`: premium × 100 (per contract, in dollars)
-- \`collateralRequired\`: strike × 100 (total cash needed to secure the put)
-- \`dailyReturn\`: (premium / strike) / DTE × 100 (percentage) — use the DTE from the live data header
-- \`breakeven\`: strike - premium (for puts) or strike + premium (for calls)
+- \`dailyReturn\`: (premium / breakeven) / DTE × 100 (percentage) — return on actual cost basis, using DTE from live data header
+- \`annualizedReturn\`: dailyReturn × 365 (simple multiplication, no compounding)
 - \`totalPremiumThisTrade\` (in summary): Sum of all recommended trade premiums × 100
 - \`calculations\`: REQUIRED — Show your working. This object must contain:
   - \`premiumBid\`: The bid price you read from the live data (per share)
@@ -373,11 +374,11 @@ Brief: projected weekly/monthly premium, total collateral deployed.
   - \`premiumMid\`: (bid + ask) / 2 — this MUST equal the \`premium\` field
   - \`premiumSource\`: Which strike, expiry, and data row you used (e.g. "$255 Put, Fri Feb 28 expiry, from live chain")
   - \`dte\`: The DTE value from the live data header for the selected expiry — must match the \`dte\` field above
-  - \`dailyReturnCalc\`: Show the formula with actual numbers e.g. "(1.50 / 227.00) / 2 × 100 = 0.33%" — the DTE divisor must match the \`dte\` field
-  - \`breakevenCalc\`: Show the formula e.g. "227.00 - 1.50 = 225.50"
-  - \`maxProfitCalc\`: Show the formula e.g. "1.50 × 100 = $150"
-  - \`collateralCalc\`: Show the formula e.g. "227.00 × 100 = $22,700"
-  - \`annualizedCalc\`: Show the annualized return formula
+  - \`breakevenCalc\`: Show formula e.g. "227.00 - 1.50 = 225.50"
+  - \`collateralCalc\`: Show formula using BREAKEVEN e.g. "225.50 × 100 = $22,550" (NOT strike × 100)
+  - \`dailyReturnCalc\`: Show formula using BREAKEVEN e.g. "(1.50 / 225.50) / 2 × 100 = 0.33%" — the DTE divisor must match the \`dte\` field
+  - \`maxProfitCalc\`: Show formula e.g. "1.50 × 100 = $150"
+  - \`annualizedCalc\`: Show formula e.g. "0.33% × 365 = 120.5%" (simple daily × 365, no compounding)
 
 ---
 

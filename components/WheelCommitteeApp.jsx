@@ -1715,28 +1715,36 @@ JNJ"
                                         ${trade.breakeven?.toFixed(2) || (trade.strike - trade.premium).toFixed(2)}
                                       </td>
                                     </tr>
-                                    {/* Collateral */}
+                                    {/* Collateral = breakeven × 100 */}
                                     <tr className="bg-emerald-50">
                                       <td className="px-4 py-2 font-semibold text-gray-700">Collateral</td>
                                       <td className="px-4 py-2 font-bold text-gray-900 text-right border-l border-gray-200">
-                                        ${trade.collateralRequired?.toLocaleString() || (trade.strike * 100).toLocaleString()}
+                                        ${((trade.breakeven || (trade.strike - trade.premium)) * 100).toLocaleString(undefined, {maximumFractionDigits: 0})}
                                       </td>
                                     </tr>
                                     {/* Returns Row — highlighted */}
+                                    {(() => {
+                                      const breakeven = trade.breakeven || (trade.strike - trade.premium);
+                                      const pctReturn = (trade.premium / breakeven * 100);
+                                      const daily = trade.dte ? pctReturn / trade.dte : 0;
+                                      const yearly = daily * 365;
+                                      return (
                                     <tr className="bg-gray-800 text-white">
                                       <td className="px-4 py-3 font-bold" colSpan={2}>% Return</td>
                                       <td className="px-4 py-3 font-bold text-center text-lg border-l border-gray-600">
-                                        {trade.premium && trade.strike ? ((trade.premium / trade.strike) * 100).toFixed(2) : '—'}%
+                                        {pctReturn.toFixed(2)}%
                                       </td>
                                       <td className={`px-4 py-3 font-bold text-center text-lg border-l border-gray-600 ${
-                                        trade.dailyReturn >= 0.30 ? 'text-emerald-400' : 'text-red-400'
+                                        daily >= 0.30 ? 'text-emerald-400' : 'text-red-400'
                                       }`}>
-                                        {trade.dailyReturn?.toFixed(2) || (trade.premium && trade.strike && trade.dte ? ((trade.premium / trade.strike) / trade.dte * 100).toFixed(2) : '—')}%
+                                        {daily.toFixed(2)}%
                                       </td>
                                       <td className="px-4 py-3 font-bold text-center text-lg border-l border-gray-600 text-emerald-400">
-                                        {trade.annualizedReturn?.toFixed(2) || (trade.dailyReturn ? (trade.dailyReturn * 365).toFixed(2) : '—')}%
+                                        {yearly.toFixed(2)}%
                                       </td>
                                     </tr>
+                                      );
+                                    })()}
                                   </tbody>
                                 </table>
                               </div>
