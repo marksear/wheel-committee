@@ -3,11 +3,20 @@ import {
   TrendingUp, TrendingDown, DollarSign, ChevronRight, ChevronLeft,
   Check, Loader2, Target, BarChart2, ChevronDown, Activity,
   BarChart3, AlertTriangle, Eye, Calendar, BookOpen,
-  Repeat, ArrowRight, ArrowDown, Star, Shield, Clock,
+  Repeat, ArrowRight, ArrowDown, Star, Clock,
   PieChart, Wallet, RefreshCw, CheckCircle2, XCircle, AlertCircle,
-  Award, Zap, Brain, Layers, Bell, RotateCcw, Info, Gauge
+  Award, Brain, Layers, Bell, RotateCcw, Info, Gauge
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
+
+// Serialize structured position rows to comma-separated text
+function serializePositions(positions) {
+  if (!positions || !positions.length) return '';
+  return positions
+    .filter(p => p.ticker && p.ticker.trim())
+    .map(p => `${p.type}, ${p.ticker}, ${p.strike || '-'}, ${p.expiry || '-'}, ${p.premium || '-'}, ${p.opened || '-'}`)
+    .join('\n');
+}
 
 // Parse positions from the text input format: TYPE, TICKER, STRIKE, EXPIRY, PREMIUM, OPENED
 function parsePositions(positionsText) {
@@ -98,18 +107,18 @@ export default function WheelCommitteeApp() {
     marginApproved: true,
     optionsLevel: '2',
     // Risk
-    maxSinglePosition: '30',
+    maxSinglePosition: '5',
     maxSectorExposure: '40',
     minWheelScore: '6',
     targetMonthlyIncome: '1000',
-    // Positions
-    currentPositions: '',
+    // Positions (structured rows — serialized to text for API)
+    positions: Array(3).fill(null).map(() => ({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' })),
     // Watchlist
     watchlist: 'AAPL\nMSFT\nKO\nPEP\nJNJ',
     // Session
     sessionType: 'new_trades',
     targetDelta: '0.18',
-    targetDte: '2',
+    targetDte: '4',
     marketOutlook: 'neutral',
   });
 
@@ -165,10 +174,16 @@ export default function WheelCommitteeApp() {
     setAnalysisError(null);
 
     try {
+      // Serialize structured positions rows into text for the API
+      const positionsText = (formData.positions || [])
+        .filter(p => p.ticker && p.ticker.trim())
+        .map(p => `${p.type}, ${p.ticker}, ${p.strike || '-'}, ${p.expiry || '-'}, ${p.premium || '-'}, ${p.opened || '-'}`)
+        .join('\n');
+
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ formData })
+        body: JSON.stringify({ formData: { ...formData, currentPositions: positionsText } })
       });
 
       if (!response.ok) {
@@ -375,7 +390,7 @@ export default function WheelCommitteeApp() {
             {/* Risk Warning */}
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <p className="text-sm text-red-800">
-                <strong>⚠️ Risk Warning:</strong> Options involve substantial risk. You can lose more than your initial investment. Minimum recommended account: <strong>$20,000</strong>. Not financial advice.
+                <strong>⚠️ Risk Warning:</strong> Options involve substantial risk. You can lose more than your initial investment. Not financial advice.
               </p>
             </div>
           </div>
@@ -408,54 +423,7 @@ export default function WheelCommitteeApp() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Position Sizing Mode</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setFormData({ ...formData, mode: 'cash_secured' })}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    formData.mode === 'cash_secured'
-                      ? 'border-emerald-500 bg-emerald-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Shield className={`w-5 h-5 ${formData.mode === 'cash_secured' ? 'text-emerald-600' : 'text-gray-400'}`} />
-                    <span className="font-bold text-gray-900">Cash-Secured</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Full cash coverage for assignment</p>
-                  <p className="text-xs text-gray-400 mt-1">Recommended for most traders</p>
-                </button>
-                <button
-                  onClick={() => setFormData({ ...formData, mode: 'margin' })}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    formData.mode === 'margin'
-                      ? 'border-amber-500 bg-amber-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Zap className={`w-5 h-5 ${formData.mode === 'margin' ? 'text-amber-600' : 'text-gray-400'}`} />
-                    <span className="font-bold text-gray-900">Margin</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Use buying power for efficiency</p>
-                  <p className="text-xs text-amber-600 mt-1">⚠️ Advanced — amplifies losses</p>
-                </button>
-              </div>
-            </div>
-
-            {formData.mode === 'margin' && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Buying Power ($)</label>
-                <input
-                  type="number"
-                  value={formData.buyingPower}
-                  onChange={(e) => setFormData({ ...formData, buyingPower: e.target.value })}
-                  className="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 mb-2"
-                />
-                <p className="text-xs text-amber-700">We'll limit BPR to 50% max to maintain safety margin.</p>
-              </div>
-            )}
+            {/* Mode is always cash_secured — no UI selector needed */}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -499,45 +467,143 @@ export default function WheelCommitteeApp() {
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Current Positions</h2>
             <p className="text-gray-600">Enter your open Wheel positions (if any)</p>
-            
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Open Positions</label>
-              <textarea
-                value={formData.currentPositions}
-                onChange={(e) => setFormData({ ...formData, currentPositions: e.target.value })}
-                placeholder="Example:
-PUT, AAPL, 180, 2026-02-21, 2.50, 2026-01-15
-PUT, MSFT, 400, 2026-02-28, 4.20, 2026-01-18
-CALL, KO, 62, 2026-02-21, 0.85, 2026-01-20
-SHARES, PEP, 100, 168.50, -, 2026-01-10
-
-Format: Type, Ticker, Strike/Shares, Expiry/CostBasis, Premium, Opened"
-                rows={8}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono text-sm"
-              />
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-medium text-gray-900 mb-2">Position Types</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                  <span><strong>PUT</strong> — Open short put</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-amber-500 rounded"></div>
-                  <span><strong>CALL</strong> — Open covered call</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-purple-500 rounded"></div>
-                  <span><strong>SHARES</strong> — Assigned shares</span>
-                </div>
+              <div className="bg-white rounded-xl border-2 border-gray-300 overflow-hidden shadow-sm">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-800 text-white">
+                      <th className="px-3 py-2 text-left font-semibold">Type</th>
+                      <th className="px-3 py-2 text-left font-semibold">Ticker</th>
+                      <th className="px-3 py-2 text-left font-semibold">Strike</th>
+                      <th className="px-3 py-2 text-left font-semibold">Expiry</th>
+                      <th className="px-3 py-2 text-left font-semibold">Premium</th>
+                      <th className="px-3 py-2 text-left font-semibold">Opened</th>
+                      <th className="px-2 py-2 w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(formData.positions || Array(3).fill({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' })).map((pos, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-emerald-50' : 'bg-white'}>
+                        <td className="px-1 py-1">
+                          <select
+                            value={pos.type}
+                            onChange={(e) => {
+                              const rows = [...(formData.positions || Array(3).fill({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' }))];
+                              rows[i] = { ...rows[i], type: e.target.value };
+                              setFormData({ ...formData, positions: rows });
+                            }}
+                            className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs font-medium bg-white"
+                          >
+                            <option value="PUT">PUT</option>
+                            <option value="CALL">CALL</option>
+                            <option value="SHARES">SHARES</option>
+                          </select>
+                        </td>
+                        <td className="px-1 py-1">
+                          <input
+                            value={pos.ticker}
+                            onChange={(e) => {
+                              const rows = [...(formData.positions || Array(3).fill({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' }))];
+                              rows[i] = { ...rows[i], ticker: e.target.value.toUpperCase() };
+                              setFormData({ ...formData, positions: rows });
+                            }}
+                            placeholder="AAPL"
+                            className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs font-mono uppercase"
+                            maxLength={5}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input
+                            value={pos.strike}
+                            onChange={(e) => {
+                              const rows = [...(formData.positions || Array(3).fill({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' }))];
+                              rows[i] = { ...rows[i], strike: e.target.value };
+                              setFormData({ ...formData, positions: rows });
+                            }}
+                            placeholder="180"
+                            className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs font-mono"
+                            type="number"
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input
+                            value={pos.expiry}
+                            onChange={(e) => {
+                              const rows = [...(formData.positions || Array(3).fill({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' }))];
+                              rows[i] = { ...rows[i], expiry: e.target.value };
+                              setFormData({ ...formData, positions: rows });
+                            }}
+                            placeholder="2026-03-21"
+                            className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs font-mono"
+                            type="date"
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input
+                            value={pos.premium}
+                            onChange={(e) => {
+                              const rows = [...(formData.positions || Array(3).fill({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' }))];
+                              rows[i] = { ...rows[i], premium: e.target.value };
+                              setFormData({ ...formData, positions: rows });
+                            }}
+                            placeholder="2.50"
+                            className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs font-mono"
+                            type="number"
+                            step="0.01"
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input
+                            value={pos.opened}
+                            onChange={(e) => {
+                              const rows = [...(formData.positions || Array(3).fill({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' }))];
+                              rows[i] = { ...rows[i], opened: e.target.value };
+                              setFormData({ ...formData, positions: rows });
+                            }}
+                            placeholder="2026-01-15"
+                            className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs font-mono"
+                            type="date"
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          {(formData.positions || []).length > 1 && (
+                            <button
+                              onClick={() => {
+                                const rows = [...(formData.positions || [])];
+                                rows.splice(i, 1);
+                                setFormData({ ...formData, positions: rows });
+                              }}
+                              className="text-gray-400 hover:text-red-500 text-xs px-1"
+                              title="Remove row"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+
+              {(formData.positions || Array(3).fill(null)).length < 10 && (
+                <button
+                  onClick={() => {
+                    const rows = [...(formData.positions || Array(3).fill({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' }))];
+                    rows.push({ type: 'PUT', ticker: '', strike: '', expiry: '', premium: '', opened: '' });
+                    setFormData({ ...formData, positions: rows });
+                  }}
+                  className="mt-2 text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
+                >
+                  + Add Row
+                </button>
+              )}
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-800">
-                <strong>No positions yet?</strong> That's fine — leave this blank and we'll recommend new trades on stocks from your watchlist.
+                <strong>No positions yet?</strong> That's fine — leave rows blank and we'll recommend new trades from your watchlist.
               </p>
             </div>
           </div>
@@ -626,7 +692,8 @@ JNJ"
                   onChange={(e) => setFormData({ ...formData, targetDte: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="14">7-14 days (Fast turnover)</option>
+                  <option value="4">1-7 days (Weekly / 0DTE)</option>
+                  <option value="11">8-14 days (Bi-weekly)</option>
                   <option value="25">21-30 days (Monthly)</option>
                   <option value="35">30-45 days (Optimal theta)</option>
                   <option value="52">45-60 days (Patient)</option>
@@ -664,7 +731,7 @@ JNJ"
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Max Single Position (%)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Max Allocation Per Trade (%)</label>
                 <input
                   type="number"
                   value={formData.maxSinglePosition}
@@ -819,7 +886,7 @@ JNJ"
                 }
 
                 // From open positions
-                const positions = parsePositions(formData.currentPositions);
+                const positions = parsePositions(serializePositions(formData.positions));
                 positions.forEach(pos => {
                   if (pos.type === 'PUT') totalDelta += 0.15; // approx short put delta
                   else if (pos.type === 'CALL') totalDelta -= 0.15; // approx short call delta
@@ -878,7 +945,7 @@ JNJ"
 
               {/* Management panel removed — Wheel only */}
               {false && (() => {
-                const positions = parsePositions(formData.currentPositions);
+                const positions = parsePositions(serializePositions(formData.positions));
                 if (positions.length === 0) {
                   return (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">

@@ -175,7 +175,7 @@ ${formData.mode === 'margin' ? `| Buying Power | $${formData.buyingPower} |` : '
 
 | Setting | Value |
 |---------|-------|
-| Max Single Position | ${formData.maxSinglePosition}% |
+| Max Allocation Per Trade | ${formData.maxSinglePosition}% |
 | Max Sector Exposure | ${formData.maxSectorExposure}% |
 | Min Wheel Score | ${formData.minWheelScore} |
 | Target Monthly Income | $${formData.targetMonthlyIncome} |
