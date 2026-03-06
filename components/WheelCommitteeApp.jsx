@@ -366,11 +366,6 @@ export default function WheelCommitteeApp() {
                 <p className="font-medium text-gray-900">Wheel Score™</p>
                 <p className="text-xs text-gray-500">Rate stock suitability</p>
               </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
-                <PieChart className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                <p className="font-medium text-gray-900">Income Dashboard</p>
-                <p className="text-xs text-gray-500">Track your premiums</p>
-              </div>
               <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 text-center">
                 <Target className="w-8 h-8 text-purple-600 mx-auto mb-2" />
                 <p className="font-medium text-gray-900">Smart Strikes</p>
@@ -2232,17 +2227,6 @@ JNJ"
                 </div>
               )}
 
-              {/* Income Dashboard */}
-              {analysisResult.incomeDashboard && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="font-bold text-gray-900 mb-3">Income Dashboard</h3>
-                  <div className="prose prose-sm max-w-none">
-                    <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-auto">
-                      {analysisResult.incomeDashboard}
-                    </pre>
-                  </div>
-                </div>
-              )}
 
               {/* Full Analysis */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">

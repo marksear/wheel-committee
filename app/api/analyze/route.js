@@ -223,7 +223,7 @@ ${marketDataText}
 # REQUIRED OUTPUT
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**IMPORTANT: Be concise in Parts A-F. Keep each to 2-5 sentences max. The JSON in Part G is the primary output — spend your effort getting the numbers right.**
+**IMPORTANT: Be concise in Parts A-E. Keep each to 2-5 sentences max. The JSON in Part F is the primary output — spend your effort getting the numbers right.**
 
 ## PART A — ACCOUNT SNAPSHOT
 Brief summary: account size, available capital, capacity for new trades, diversification concerns.
@@ -240,12 +240,9 @@ Top opportunities ranked by daily return. One sentence per trade explaining why.
 ## PART E — ACTION SUMMARY
 List trades to execute, stocks to skip (with reason), and stocks to watch.
 
-## PART F — INCOME DASHBOARD
-Brief: projected weekly/monthly premium, total collateral deployed.
-
 ---
 
-## PART G — STRUCTURED DATA (REQUIRED)
+## PART F — STRUCTURED DATA (REQUIRED)
 
 **IMPORTANT: You MUST include this JSON block at the very end of your response. This is used for parsing.**
 
@@ -467,7 +464,6 @@ function parseResponse(responseText, formData) {
     watchlistAnalysis: extractSection(responseText, 'PART C', 'PART D') || extractSection(responseText, 'WATCHLIST ANALYSIS', 'PART D'),
     recommendedTrades: extractSection(responseText, 'PART D', 'PART E') || extractSection(responseText, 'RECOMMENDED TRADES', 'PART E'),
     actionSummary: extractSection(responseText, 'PART E', 'PART F') || extractSection(responseText, 'ACTION SUMMARY', 'PART F'),
-    incomeDashboard: extractSection(responseText, 'PART F', 'PART G') || extractSection(responseText, 'INCOME DASHBOARD', 'PART G'),
     fullAnalysis: responseText,
     jsonParsed: jsonData !== null
   }
