@@ -2228,15 +2228,6 @@ JNJ"
               )}
 
 
-              {/* Full Analysis */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                <h3 className="font-bold text-gray-900 mb-3">Full Analysis</h3>
-                <div className="prose prose-sm max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-auto max-h-[600px]">
-                    {analysisResult.fullAnalysis || 'No detailed analysis available.'}
-                  </pre>
-                </div>
-              </div>
             </div>
           );
         }
