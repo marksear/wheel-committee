@@ -839,7 +839,9 @@ JNJ"
                   </div>
                   <div className="bg-white/10 rounded-lg p-3">
                     <p className="text-emerald-200 text-xs">Target DTE</p>
-                    <p className="text-lg font-bold">{formData.targetDte} days</p>
+                    <p className="text-lg font-bold">{
+                      { '4': '1-7', '11': '8-14', '25': '21-30', '35': '30-45', '52': '45-60' }[formData.targetDte] || formData.targetDte
+                    } days</p>
                   </div>
                   <div className="bg-white/10 rounded-lg p-3">
                     <p className="text-emerald-200 text-xs">Target Delta</p>
