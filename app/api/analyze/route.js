@@ -54,7 +54,7 @@ export async function POST(request) {
 
         const claudeStream = client.messages.stream({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 8192,
+          max_tokens: 4096,
           temperature: 0,
           messages: [
             {
@@ -223,28 +223,7 @@ ${marketDataText}
 # REQUIRED OUTPUT
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**IMPORTANT: Be concise in Parts A-E. Keep each to 2-5 sentences max. The JSON in Part F is the primary output — spend your effort getting the numbers right.**
-
-## PART A — ACCOUNT SNAPSHOT
-Brief summary: account size, available capital, capacity for new trades, diversification concerns.
-
-${hasPositions ? `## PART B — POSITION REVIEW
-For each open position: P&L status, DTE remaining, recommendation (HOLD/CLOSE/ROLL).
-` : ''}
-${hasWatchlist ? `## PART C — WATCHLIST ANALYSIS
-For each stock: Wheel Score™ (show the 7 factor scores and weighted total), verdict (SELL/WAIT/SKIP), and brief rationale.
-` : ''}
-## PART D — RECOMMENDED TRADES
-Top opportunities ranked by daily return. One sentence per trade explaining why.
-
-## PART E — ACTION SUMMARY
-List trades to execute, stocks to skip (with reason), and stocks to watch.
-
----
-
-## PART F — STRUCTURED DATA (REQUIRED)
-
-**IMPORTANT: You MUST include this JSON block at the very end of your response. This is used for parsing.**
+**IMPORTANT: Output ONLY the JSON block below. No prose, no headers, no explanation — just the JSON. Spend all effort getting the numbers right.**
 
 \`\`\`json
 {
