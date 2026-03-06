@@ -1689,7 +1689,10 @@ JNJ"
                               {trade.wheelScore && <StarRating rating={Math.round(trade.wheelScore / 2)} />}
                               <IVRankBadge ticker={trade.ticker} />
                             </div>
-                            <p className="text-sm text-gray-500">{trade.name || trade.recommendation || 'Analyzing...'}</p>
+                            <p className="text-sm text-gray-500">
+                              {trade.name || trade.recommendation || 'Analyzing...'}
+                              {trade.currentPrice != null && <span className="ml-2 font-medium text-gray-700">${trade.currentPrice.toFixed(2)}</span>}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
