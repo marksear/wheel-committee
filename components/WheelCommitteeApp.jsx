@@ -118,7 +118,7 @@ export default function WheelCommitteeApp() {
     // Session
     sessionType: 'new_trades',
     targetDelta: '0.18',
-    targetDte: '4',
+    targetDte: '2',
     marketOutlook: 'neutral',
   });
 
@@ -687,7 +687,8 @@ JNJ"
                   onChange={(e) => setFormData({ ...formData, targetDte: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="4">1-7 days (Weekly)</option>
+                  <option value="2">1-3 days (Mon/Wed/Fri)</option>
+                  <option value="5">1-7 days (Fri only)</option>
                   <option value="11">8-14 days (Bi-weekly)</option>
                   <option value="25">21-30 days (Monthly)</option>
                   <option value="35">30-45 days (Optimal theta)</option>
@@ -835,7 +836,7 @@ JNJ"
                   <div className="bg-white/10 rounded-lg p-3">
                     <p className="text-emerald-200 text-xs">Target DTE</p>
                     <p className="text-lg font-bold">{
-                      { '4': '1-7', '11': '8-14', '25': '21-30', '35': '30-45', '52': '45-60' }[formData.targetDte] || formData.targetDte
+                      { '2': '1-3', '5': '1-7', '11': '8-14', '25': '21-30', '35': '30-45', '52': '45-60' }[formData.targetDte] || formData.targetDte
                     } days</p>
                   </div>
                   <div className="bg-white/10 rounded-lg p-3">
