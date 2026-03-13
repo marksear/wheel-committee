@@ -2123,15 +2123,23 @@ JNJ"
                   </div>
                   <div className="divide-y divide-gray-100">
                     {analysisResult.skipList.map((item, index) => (
-                      <div key={item.ticker || index} className="p-4 flex justify-between items-center">
-                        <div>
-                          <p className="font-medium text-gray-900">{item.ticker} {item.name && <span className="text-gray-500">- {item.name}</span>}</p>
-                          <p className="text-sm text-red-600">{item.reason}</p>
+                      <div key={item.ticker || index} className="p-4">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium text-gray-900">{item.ticker} {item.name && <span className="text-gray-500">- {item.name}</span>}</p>
+                            <p className="text-sm text-red-600">{item.reason}</p>
+                          </div>
+                          {item.revisitDate && (
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                              Revisit: {item.revisitDate}
+                            </span>
+                          )}
                         </div>
-                        {item.revisitDate && (
-                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                            Revisit: {item.revisitDate}
-                          </span>
+                        {item.reasoning && (
+                          <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p className="text-xs font-medium text-amber-800 mb-1">AI Reasoning</p>
+                            <p className="text-sm text-amber-700">{item.reasoning}</p>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -2164,6 +2172,12 @@ JNJ"
                             {item.potentialStrike && <span>Strike: ${item.potentialStrike}</span>}
                             {item.currentIV && <span>Current IV: {item.currentIV}%</span>}
                             {item.targetIV && <span>Target IV: {item.targetIV}%</span>}
+                          </div>
+                        )}
+                        {item.reasoning && (
+                          <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p className="text-xs font-medium text-amber-800 mb-1">AI Reasoning</p>
+                            <p className="text-sm text-amber-700">{item.reasoning}</p>
                           </div>
                         )}
                       </div>

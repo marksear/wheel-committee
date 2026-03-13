@@ -54,7 +54,7 @@ export async function POST(request) {
 
         const claudeStream = client.messages.stream({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 4096,
+          max_tokens: 5120,
           temperature: 0,
           messages: [
             {
@@ -295,6 +295,7 @@ ${marketDataText}
       "ticker": "TSLA",
       "name": "Tesla Inc.",
       "reason": "Earnings in 5 days - too risky",
+      "reasoning": "TSLA reports earnings on Feb 5. IV crush post-earnings typically drops premium by 40-60%, making pre-earnings CSPs a losing proposition. The 0.18%/day return doesn't compensate for the binary event risk. Revisit after earnings when IV normalizes.",
       "dailyReturn": 0.18,
       "revisitDate": "After Feb 5 earnings"
     }
@@ -304,6 +305,7 @@ ${marketDataText}
       "ticker": "NVDA",
       "name": "NVIDIA Corporation",
       "triggerCondition": "Wait for IV Rank above 40",
+      "reasoning": "NVDA current IV Rank is 32, below the 40 threshold where weekly CSP premiums exceed 0.20%/day. At IV Rank 40, the $850 strike put would yield ~$15.00 (0.35%/day). The stock scores well on fundamentals but premiums are too thin at current volatility levels.",
       "currentIV": 32,
       "targetIV": 40,
       "expiryFrequency": "3x/week",
