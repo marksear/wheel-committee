@@ -5,7 +5,7 @@ import {
   BarChart3, AlertTriangle, Eye, Calendar, BookOpen,
   Repeat, ArrowRight, ArrowDown, Star, Clock,
   PieChart, Wallet, RefreshCw, CheckCircle2, XCircle, AlertCircle,
-  Award, Brain, Layers, Bell, RotateCcw, Info, Gauge
+  Award, Brain, Layers, Bell, RotateCcw, Info, Gauge, Search, Filter
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
 
@@ -95,6 +95,15 @@ export default function WheelCommitteeApp() {
   const [ivRankData, setIvRankData] = useState({}); // { ticker: { ivRank, ivPercentile, currentIV, ... } }
   const [ivRankLoading, setIvRankLoading] = useState(false);
   const [ivTooltipTicker, setIvTooltipTicker] = useState(null); // which ticker's IV tooltip is showing
+
+  // Stock screener state
+  const [watchlistTab, setWatchlistTab] = useState('manual');
+  const [screenerIndex, setScreenerIndex] = useState('sp500');
+  const [screenerFilters, setScreenerFilters] = useState({ priceMin: '10', priceMax: '60', volumeMin: '1000000', ivMin: '', ivMax: '', perfMin: '0' });
+  const [screenerResults, setScreenerResults] = useState([]);
+  const [screenerSelected, setScreenerSelected] = useState(new Set());
+  const [screenerLoading, setScreenerLoading] = useState(false);
+  const [screenerTotal, setScreenerTotal] = useState(0);
 
   const [formData, setFormData] = useState({
     // Account
@@ -608,55 +617,319 @@ export default function WheelCommitteeApp() {
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Watchlist</h2>
-            <p className="text-gray-600">Enter tickers you want to analyze for The Wheel</p>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stocks to Analyze</label>
-              <textarea
-                value={formData.watchlist}
-                onChange={(e) => setFormData({ ...formData, watchlist: e.target.value })}
-                placeholder="Enter one ticker per line:
+            <p className="text-gray-600">Enter tickers manually or use the stock screener to find candidates</p>
+
+            {/* Tab selector */}
+            <div className="flex border-b border-gray-200">
+              <button
+                onClick={() => setWatchlistTab('manual')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  watchlistTab === 'manual'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Manual Entry
+              </button>
+              <button
+                onClick={() => setWatchlistTab('screener')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  watchlistTab === 'screener'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Filter className="w-4 h-4 inline mr-1" />
+                Stock Screener
+              </button>
+            </div>
+
+            {watchlistTab === 'manual' ? (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Stocks to Analyze</label>
+                  <textarea
+                    value={formData.watchlist}
+                    onChange={(e) => setFormData({ ...formData, watchlist: e.target.value })}
+                    placeholder="Enter one ticker per line:
 AAPL
 MSFT
 KO
 PEP
 JNJ"
-                rows={6}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono text-sm"
-              />
-            </div>
+                    rows={6}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono text-sm"
+                  />
+                </div>
 
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-              <h3 className="font-medium text-emerald-900 mb-2">What We'll Analyze</h3>
-              <ul className="text-sm text-emerald-800 space-y-1">
-                <li>✓ Wheel Score™ (liquidity, IV, quality, price, dividends)</li>
-                <li>✓ Current IV Rank & premium levels</li>
-                <li>✓ Earnings dates (avoid holding through earnings)</li>
-                <li>✓ Optimal strike & expiry selection</li>
-                <li>✓ Expected returns (monthly & annualized)</li>
-              </ul>
-            </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-medium text-gray-900 mb-2">Quick Add</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {['AAPL', 'MSFT', 'KO', 'PEP', 'JNJ', 'PG', 'JPM', 'V', 'HD', 'MCD'].map(ticker => (
+                      <button
+                        key={ticker}
+                        onClick={() => {
+                          const current = formData.watchlist.split('\n').filter(t => t.trim());
+                          if (!current.includes(ticker)) {
+                            setFormData({ ...formData, watchlist: [...current, ticker].join('\n') });
+                          }
+                        }}
+                        className="px-2 py-1 bg-white border border-gray-200 rounded text-sm hover:bg-gray-100 transition-colors"
+                      >
+                        + {ticker}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                {/* Index selector */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Index</label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: 'sp500', label: 'S&P 500' },
+                      { value: 'nasdaq100', label: 'Nasdaq 100' },
+                      { value: 'russell2000', label: 'Russell 2000' },
+                    ].map(idx => (
+                      <button
+                        key={idx.value}
+                        onClick={() => setScreenerIndex(idx.value)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          screenerIndex === idx.value
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {idx.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-medium text-gray-900 mb-2">💡 Good Wheel Candidates</h3>
-              <p className="text-sm text-gray-600 mb-2">Stocks that typically work well:</p>
-              <div className="flex flex-wrap gap-2">
-                {['AAPL', 'MSFT', 'KO', 'PEP', 'JNJ', 'PG', 'JPM', 'V', 'HD', 'MCD'].map(ticker => (
-                  <button
-                    key={ticker}
-                    onClick={() => {
-                      const current = formData.watchlist.split('\n').filter(t => t.trim());
-                      if (!current.includes(ticker)) {
-                        setFormData({ ...formData, watchlist: [...current, ticker].join('\n') });
-                      }
-                    }}
-                    className="px-2 py-1 bg-white border border-gray-200 rounded text-sm hover:bg-gray-100 transition-colors"
-                  >
-                    + {ticker}
-                  </button>
-                ))}
+                {/* Filters */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Price Range ($)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={screenerFilters.priceMin}
+                        onChange={(e) => setScreenerFilters({ ...screenerFilters, priceMin: e.target.value })}
+                        placeholder="Min"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <input
+                        type="number"
+                        value={screenerFilters.priceMax}
+                        onChange={(e) => setScreenerFilters({ ...screenerFilters, priceMax: e.target.value })}
+                        placeholder="Max"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Min Volume</label>
+                    <select
+                      value={screenerFilters.volumeMin}
+                      onChange={(e) => setScreenerFilters({ ...screenerFilters, volumeMin: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="0">Any</option>
+                      <option value="100000">100K+</option>
+                      <option value="500000">500K+</option>
+                      <option value="1000000">1M+</option>
+                      <option value="5000000">5M+</option>
+                      <option value="10000000">10M+</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Implied Volatility (%)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={screenerFilters.ivMin}
+                        onChange={(e) => setScreenerFilters({ ...screenerFilters, ivMin: e.target.value })}
+                        placeholder="Min"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <input
+                        type="number"
+                        value={screenerFilters.ivMax}
+                        onChange={(e) => setScreenerFilters({ ...screenerFilters, ivMax: e.target.value })}
+                        placeholder="Max"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">90-Day Performance (Min %)</label>
+                    <input
+                      type="number"
+                      value={screenerFilters.perfMin}
+                      onChange={(e) => setScreenerFilters({ ...screenerFilters, perfMin: e.target.value })}
+                      placeholder="e.g. 0 to exclude losers"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Screen button */}
+                <button
+                  onClick={async () => {
+                    setScreenerLoading(true)
+                    setScreenerResults([])
+                    setScreenerSelected(new Set())
+                    try {
+                      const res = await fetch('/api/screen', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          index: screenerIndex,
+                          filters: {
+                            priceMin: parseFloat(screenerFilters.priceMin) || 0,
+                            priceMax: parseFloat(screenerFilters.priceMax) || 999999,
+                            volumeMin: parseInt(screenerFilters.volumeMin) || 0,
+                            ivMin: parseFloat(screenerFilters.ivMin) || 0,
+                            ivMax: parseFloat(screenerFilters.ivMax) || 999,
+                            perfMin: parseFloat(screenerFilters.perfMin) || -999,
+                          },
+                        }),
+                      })
+                      const data = await res.json()
+                      if (data.error) throw new Error(data.error)
+                      setScreenerResults(data.stocks || [])
+                      setScreenerTotal(data.total || 0)
+                    } catch (err) {
+                      console.error('Screen error:', err)
+                    } finally {
+                      setScreenerLoading(false)
+                    }
+                  }}
+                  disabled={screenerLoading}
+                  className="w-full py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  {screenerLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Screening {screenerIndex === 'russell2000' ? '~2000' : screenerIndex === 'sp500' ? '~500' : '~100'} stocks...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" />
+                      Screen Stocks
+                    </>
+                  )}
+                </button>
+
+                {/* Results */}
+                {screenerResults.length > 0 && (
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-sm text-gray-600">
+                        {screenerResults.length} of {screenerTotal} stocks match filters
+                      </p>
+                      <button
+                        onClick={() => {
+                          const current = formData.watchlist.split('\n').filter(t => t.trim())
+                          const newTickers = [...screenerSelected].filter(t => !current.includes(t))
+                          if (newTickers.length > 0) {
+                            setFormData({ ...formData, watchlist: [...current, ...newTickers].join('\n') })
+                          }
+                          setWatchlistTab('manual')
+                        }}
+                        disabled={screenerSelected.size === 0}
+                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      >
+                        Add {screenerSelected.size} to Watchlist
+                      </button>
+                    </div>
+
+                    <div className="border border-gray-200 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="px-3 py-2 text-left">
+                              <input
+                                type="checkbox"
+                                checked={screenerSelected.size === screenerResults.length && screenerResults.length > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setScreenerSelected(new Set(screenerResults.map(s => s.ticker)))
+                                  } else {
+                                    setScreenerSelected(new Set())
+                                  }
+                                }}
+                                className="rounded"
+                              />
+                            </th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600">Ticker</th>
+                            <th className="px-3 py-2 text-right font-medium text-gray-600">Price</th>
+                            <th className="px-3 py-2 text-right font-medium text-gray-600">Volume</th>
+                            <th className="px-3 py-2 text-right font-medium text-gray-600">IV</th>
+                            <th className="px-3 py-2 text-right font-medium text-gray-600">90d Perf</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {screenerResults.map(stock => (
+                            <tr
+                              key={stock.ticker}
+                              className="hover:bg-gray-50 cursor-pointer"
+                              onClick={() => {
+                                const next = new Set(screenerSelected)
+                                if (next.has(stock.ticker)) next.delete(stock.ticker)
+                                else next.add(stock.ticker)
+                                setScreenerSelected(next)
+                              }}
+                            >
+                              <td className="px-3 py-2">
+                                <input
+                                  type="checkbox"
+                                  checked={screenerSelected.has(stock.ticker)}
+                                  onChange={() => {}}
+                                  className="rounded"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className="font-medium">{stock.ticker}</span>
+                                <span className="text-gray-400 ml-1 text-xs">{stock.name}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right">${stock.price?.toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right text-gray-500">
+                                {stock.volume ? (stock.volume >= 1000000 ? `${(stock.volume / 1000000).toFixed(1)}M` : `${(stock.volume / 1000).toFixed(0)}K`) : '-'}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                {stock.iv != null ? `${stock.iv.toFixed(0)}%` : '-'}
+                              </td>
+                              <td className={`px-3 py-2 text-right ${stock.perf90d != null ? (stock.perf90d >= 0 ? 'text-emerald-600' : 'text-red-500') : 'text-gray-400'}`}>
+                                {stock.perf90d != null ? `${stock.perf90d >= 0 ? '+' : ''}${stock.perf90d.toFixed(1)}%` : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {!screenerLoading && screenerResults.length === 0 && screenerTotal > 0 && (
+                  <p className="text-sm text-gray-500 text-center py-4">No stocks matched your filters. Try broadening your criteria.</p>
+                )}
               </div>
-            </div>
+            )}
+
+            {/* Current watchlist summary */}
+            {formData.watchlist.trim() && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <h3 className="font-medium text-emerald-900 mb-1">
+                  Current Watchlist ({formData.watchlist.split('\n').filter(t => t.trim()).length} tickers)
+                </h3>
+                <p className="text-sm text-emerald-700 font-mono">
+                  {formData.watchlist.split('\n').filter(t => t.trim()).join(', ')}
+                </p>
+              </div>
+            )}
           </div>
         );
 
